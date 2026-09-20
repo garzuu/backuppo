@@ -10,6 +10,7 @@ backupper-core.workspace = true
 backupper-destinations.workspace = true
 backupper-notifiers.workspace = true
 backupper-sources.workspace = true
+chrono = "0.4.45"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"

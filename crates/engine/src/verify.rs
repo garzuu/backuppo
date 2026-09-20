@@ -8,6 +8,7 @@ use backupper_core::traits::Destination;
 use tracing::{info, instrument, warn};
 
 use crate::manifest::{self, Manifest, ManifestEntry};
+use crate::naming::extract_timestamp;
 use crate::{archive, notify, runner};
 
 /// Numero massimo di file di cui viene ricalcolato lo sha256 durante la
@@ -208,26 +209,5 @@ fn check_age(job_name: &str, name: &str, max_hours: Option<u64>) {
             max_hours,
             "il backup più recente supera la soglia di età configurata"
         );
-    }
-}
-
-/// Estrae il timestamp unix dal nome file `<job>-<timestamp>.tar...`.
-fn extract_timestamp(name: &str) -> Option<u64> {
-    let (_, after) = name.rsplit_once('-')?;
-    let ts = after.split('.').next()?;
-    ts.parse().ok()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn extracts_timestamp_from_filename() {
-        assert_eq!(
-            extract_timestamp("home-documents-1732104000.tar.zst.age"),
-            Some(1732104000)
-        );
-        assert_eq!(extract_timestamp("no-timestamp-here"), None);
     }
 }

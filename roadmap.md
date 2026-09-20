@@ -123,11 +123,11 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 5 — Scheduler e retention
 
-- [ ] Modalità daemon: `backupper daemon` con scheduler cron-like (`tokio-cron-scheduler`)
-- [ ] Un job non parte se il precedente è ancora in esecuzione (lock)
-- [ ] Retention `daily/weekly/monthly` con cancellazione dei backup scaduti
-- [ ] Retention **mai** distruttiva se l'ultimo backup è fallito o non verificato
-- [ ] Shutdown pulito su SIGTERM/Ctrl+C
+- [x] Modalità daemon: `backupper daemon` con scheduler cron-like (`tokio-cron-scheduler`)
+- [x] Un job non parte se il precedente è ancora in esecuzione (lock)
+- [x] Retention `daily/weekly/monthly` con cancellazione dei backup scaduti
+- [x] Retention **mai** distruttiva se l'ultimo backup è fallito o non verificato
+- [x] Shutdown pulito su SIGTERM/Ctrl+C
 
 **Fatto quando:** il daemon esegue due job schedulati e applica la retention senza cancellare l'unico backup valido.
 

@@ -1,3 +1,5 @@
+mod daemon;
+
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
@@ -45,6 +47,12 @@ enum Command {
         #[arg(long)]
         notifier: Option<String>,
     },
+    /// Avvia il daemon: esegue i job secondo il loro schedule cron e
+    /// applica la retention dopo ogni backup riuscito.
+    Daemon {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -59,6 +67,7 @@ async fn main() -> Result<()> {
         Command::Run { config, job } => run(&config, &job).await,
         Command::Verify { config, job } => verify(&config, &job).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
+        Command::Daemon { config } => daemon::run(load_config(&config)?).await,
     }
 }
 
