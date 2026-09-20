@@ -169,7 +169,7 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 - [x] Immagine Docker minimale
 - [x] Servizio systemd d'esempio e installer Windows (servizio)
 - [x] Documentazione: quickstart, riferimento config, guida al restore manuale
-- [ ] Release `v0.1.0` con changelog (pronta; manca la pubblicazione del tag)
+- [x] Release `v0.1.0` con changelog
 
 ## Fase 10 — Dopo l'MVP (da valutare)
 
