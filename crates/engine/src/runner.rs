@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use backuppo_core::config::{Compression, Config, EncryptionConfig, VerifyRestore};
+use backuppo_core::config::{Compression, Config, EncryptionConfig, EngineKind, VerifyRestore};
 use backuppo_core::error::BackupError;
 use backuppo_core::model::{Artifact, JobEvent};
 use backuppo_core::secrets::resolve_env;
@@ -8,7 +8,7 @@ use tokio::process::Command;
 use tracing::{info, instrument, warn};
 
 use crate::observability::ExecutionObserver;
-use crate::{archive, manifest, notify, verify};
+use crate::{archive, manifest, notify, restic, verify};
 
 /// Esegue il job `job_name` e invia le notifiche configurate: `on_success`
 /// se il backup (ed eventuale verifica) va a buon fine, `on_failure`
@@ -53,6 +53,10 @@ async fn run_job_impl(
         .jobs
         .get(job_name)
         .ok_or_else(|| BackupError::Other(format!("job '{job_name}' non trovato in config")))?;
+
+    if job.engine == EngineKind::Restic {
+        return run_restic_job_impl(job_name, config, observer).await;
+    }
 
     let dest_config = config.destinations.get(&job.destination).ok_or_else(|| {
         BackupError::Other(format!(
@@ -162,6 +166,54 @@ async fn run_job_impl(
 
     info!("job completato con successo");
     Ok(final_artifact)
+}
+
+async fn run_restic_job_impl(
+    job_name: &str,
+    config: &Config,
+    observer: &mut ExecutionObserver,
+) -> Result<Artifact, BackupError> {
+    let job = config
+        .jobs
+        .get(job_name)
+        .ok_or_else(|| BackupError::Other(format!("job '{job_name}' non trovato in config")))?;
+    let source = backuppo_sources::build(&job.source)?;
+    run_hooks("pre", &job.pre).await?;
+    observer.log("hook pre completati");
+
+    let staging_root = tempfile::tempdir()?;
+    let staging_data = staging_root.path().join("data");
+    let raw = source.prepare(&staging_data).await?;
+    observer.log(&format!(
+        "sorgente preparata per Restic: {} file, {} byte",
+        raw.files, raw.bytes
+    ));
+    let manifest_dir = raw.path.clone();
+    tokio::task::spawn_blocking(move || {
+        let manifest = manifest::build(&manifest_dir)?;
+        manifest::write(&manifest_dir, &manifest)
+    })
+    .await
+    .map_err(|error| BackupError::Other(format!("task di manifest interrotto: {error}")))??;
+
+    let artifact = restic::backup(job_name, config, &raw.path, raw.files, raw.bytes).await?;
+    observer.log(&format!("snapshot Restic creato: {}", artifact.checksum));
+    source.cleanup(&raw).await?;
+
+    if job.verify_restore == Some(VerifyRestore::Every) {
+        observer.verification_started();
+        let event = restic::verify(job_name, config).await?;
+        notify::dispatch(config, &job.notify.on_verify, &event).await;
+        observer.verification_succeeded();
+    }
+
+    if let Err(error) = run_hooks("post", &job.post).await {
+        warn!(%error, "hook post fallito dopo lo snapshot Restic");
+        observer.log("hook post fallito; snapshot già completato");
+    } else {
+        observer.log("hook post completati");
+    }
+    Ok(artifact)
 }
 
 async fn run_hooks(kind: &str, hooks: &[String]) -> Result<(), BackupError> {

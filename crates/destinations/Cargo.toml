@@ -8,7 +8,7 @@ license.workspace = true
 async-trait = "0.1.92"
 backon = "1.6.0"
 backuppo-core.workspace = true
-opendal = { version = "0.59.2", default-features = false, features = ["auto-register-services", "http-transport-reqwest", "http-transport-reqwest-rustls", "layers-retry", "layers-throttle", "services-fs", "services-s3", "services-webdav"] }
+opendal = { version = "0.59.2", default-features = false, features = ["auto-register-services", "http-transport-reqwest", "http-transport-reqwest-rustls", "layers-retry", "layers-throttle", "services-dropbox", "services-fs", "services-gdrive", "services-onedrive", "services-s3", "services-webdav"] }
 russh = "=0.51.1"
 russh-sftp = "3.0.0"
 tokio = { version = "1", features = ["fs", "rt"] }

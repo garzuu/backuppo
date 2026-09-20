@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use backuppo_core::config::Config;
+use backuppo_core::config::{Config, EngineKind};
 use backuppo_core::error::BackupError;
 use chrono::{DateTime, Datelike, Utc};
 use tracing::{info, instrument};
@@ -30,6 +30,11 @@ pub async fn apply(job_name: &str, config: &Config) -> Result<RetentionSummary, 
 
     let retention = &job.retention;
     if retention.daily.is_none() && retention.weekly.is_none() && retention.monthly.is_none() {
+        return Ok(RetentionSummary::default());
+    }
+
+    if job.engine == EngineKind::Restic {
+        crate::restic::forget(job_name, config, retention).await?;
         return Ok(RetentionSummary::default());
     }
 

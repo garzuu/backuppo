@@ -57,6 +57,7 @@ fn build_config(
     jobs.insert(
         "documents".to_string(),
         JobConfig {
+            engine: Default::default(),
             source: SourceConfig::Folder {
                 path: src.to_string_lossy().to_string(),
                 exclude: vec![],
@@ -83,6 +84,7 @@ fn build_config(
         jobs,
         observability: None,
         reports: Vec::new(),
+        api: None,
     }
 }
 
@@ -138,6 +140,7 @@ async fn assert_retention_prunes_old_backups(
     jobs.insert(
         job_name.to_string(),
         JobConfig {
+            engine: Default::default(),
             source: SourceConfig::Folder {
                 path: "/unused".to_string(),
                 exclude: vec![],
@@ -164,6 +167,7 @@ async fn assert_retention_prunes_old_backups(
         jobs,
         observability: None,
         reports: Vec::new(),
+        api: None,
     };
 
     let summary = backuppo_engine::retention::apply(job_name, &config)

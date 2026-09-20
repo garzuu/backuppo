@@ -10,6 +10,15 @@ il file dalla destination con lo strumento del provider (`scp`, client S3 o
 WebDAV). `bkpo verify --config config.yaml --job documents` può verificare
 direttamente l'ultimo archivio remoto senza conservarne l'estrazione.
 
+Per un job `engine: restic`, il ripristino manuale equivalente è:
+
+```sh
+export RESTIC_REPOSITORY='...'
+export RESTIC_PASSWORD='...'
+restic snapshots --tag backuppo-documents
+restic restore latest --tag backuppo-documents --target restore
+```
+
 ## 2. Decifrare, decomprimere ed estrarre
 
 Per un archivio cifrato e compresso servono `age`, `zstd` e `tar`:
@@ -43,6 +52,10 @@ controlli.
   `mysql --user root --password app < dump.sql`.
 - **Comando custom:** usa il file indicato da `output_filename` con lo strumento
   che ha prodotto l'export.
+- **Immagine disco:** verifica il device di destinazione e scrivi l'immagine
+  solo a sistema smontato, per esempio con `dd if=disk.img of=/dev/DEST bs=4M`.
+- **VM libvirt:** ripristina i file sotto `disks/`, correggi i percorsi in
+  `domain.xml` se necessario e importa con `virsh define domain.xml`.
 
 Esegui sempre il restore prima su un ambiente isolato. Backuppo usa container
 temporanei proprio per la verifica automatica dei dump PostgreSQL e MySQL.

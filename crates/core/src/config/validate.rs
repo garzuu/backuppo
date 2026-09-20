@@ -1,8 +1,9 @@
+use std::net::SocketAddr;
 use std::str::FromStr;
 
 use thiserror::Error;
 
-use super::{Config, DestinationConfig};
+use super::{Config, DestinationConfig, EngineKind};
 
 /// Errore di parsing o validazione della configurazione. Ogni variante porta
 /// il nome del campo/job coinvolto per produrre messaggi leggibili.
@@ -43,6 +44,15 @@ pub enum ConfigError {
 
     #[error("destination '{name}': serve almeno uno tra 'password_env' e 'key_path' per l'autenticazione SFTP")]
     SftpMissingAuth { name: String },
+
+    #[error("job '{job}': engine 'restic' richiede una destination di tipo 'restic'")]
+    ResticDestinationRequired { job: String },
+
+    #[error("job '{job}': una destination di tipo 'restic' richiede engine: restic")]
+    ResticEngineRequired { job: String },
+
+    #[error("campo 'api.bind' non valido ('{bind}'): usare un indirizzo loopback IP:porta")]
+    InvalidApiBind { bind: String },
 }
 
 /// Valida i riferimenti incrociati (destination/notifier) e la sintassi cron
@@ -72,6 +82,23 @@ pub fn validate(config: &Config) -> Result<(), Vec<ConfigError>> {
             });
         }
 
+        if let Some(destination) = config.destinations.get(&job.destination) {
+            let is_restic = matches!(destination, DestinationConfig::Restic { .. });
+            match (job.engine, is_restic) {
+                (EngineKind::Restic, false) => {
+                    errors.push(ConfigError::ResticDestinationRequired {
+                        job: job_name.clone(),
+                    });
+                }
+                (EngineKind::Archive, true) => {
+                    errors.push(ConfigError::ResticEngineRequired {
+                        job: job_name.clone(),
+                    });
+                }
+                _ => {}
+            }
+        }
+
         let notify_lists = [
             ("on_success", &job.notify.on_success),
             ("on_failure", &job.notify.on_failure),
@@ -94,6 +121,19 @@ pub fn validate(config: &Config) -> Result<(), Vec<ConfigError>> {
                 job: job_name.clone(),
                 expr: job.schedule.clone(),
                 message,
+            });
+        }
+    }
+
+    if let Some(api) = &config.api {
+        let valid = api
+            .bind
+            .parse::<SocketAddr>()
+            .map(|address| address.ip().is_loopback())
+            .unwrap_or(false);
+        if !valid {
+            errors.push(ConfigError::InvalidApiBind {
+                bind: api.bind.clone(),
             });
         }
     }
@@ -247,5 +287,38 @@ jobs:
             error,
             ConfigError::UnknownReportNotifier { name, .. } if name == "missing"
         )));
+    }
+
+    #[test]
+    fn validates_local_api_and_restic_engine_pairing() {
+        let yaml = r#"
+destinations:
+  snapshots:
+    type: restic
+    repository: /tmp/repository
+    password_env: RESTIC_PASSWORD
+api:
+  bind: 127.0.0.1:8787
+jobs:
+  incremental:
+    engine: restic
+    source: { type: folder, path: /tmp/source }
+    destination: snapshots
+    schedule: "0 3 * * *"
+"#;
+        let config = Config::from_yaml(yaml).expect("parsing valido");
+        validate(&config).expect("restic e API locale validi");
+
+        let invalid = yaml
+            .replace("engine: restic", "engine: archive")
+            .replace("127.0.0.1:8787", "0.0.0.0:8787");
+        let config = Config::from_yaml(&invalid).expect("parsing valido");
+        let errors = validate(&config).expect_err("config non sicura");
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, ConfigError::ResticEngineRequired { .. })));
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, ConfigError::InvalidApiBind { .. })));
     }
 }

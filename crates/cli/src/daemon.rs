@@ -29,6 +29,7 @@ where
             .map(|name| (name.clone(), Arc::new(Mutex::new(()))))
             .collect(),
     );
+    let api_handle = crate::api::spawn(Arc::clone(&config), Arc::clone(&locks)).await?;
 
     let scheduler = JobScheduler::new()
         .await
@@ -100,6 +101,9 @@ where
         .shutdown()
         .await
         .context("errore durante lo shutdown dello scheduler")?;
+    if let Some(handle) = api_handle {
+        handle.abort();
+    }
     info!("shutdown completato");
 
     Ok(())
@@ -176,6 +180,7 @@ mod tests {
         jobs.insert(
             "documents".to_string(),
             JobConfig {
+                engine: Default::default(),
                 source: SourceConfig::Folder {
                     path: src.to_string_lossy().to_string(),
                     exclude: vec![],
@@ -199,6 +204,7 @@ mod tests {
             jobs,
             observability: None,
             reports: Vec::new(),
+            api: None,
         }
     }
 

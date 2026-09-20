@@ -27,6 +27,7 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
     jobs.insert(
         "documents".to_string(),
         JobConfig {
+            engine: Default::default(),
             source: SourceConfig::Folder {
                 path: src.to_string_lossy().to_string(),
                 exclude: vec!["*.tmp".to_string()],
@@ -53,6 +54,7 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
         jobs,
         observability: None,
         reports: Vec::new(),
+        api: None,
     }
 }
 

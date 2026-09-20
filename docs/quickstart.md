@@ -47,6 +47,10 @@ bkpo verify --config /etc/backuppo/config.yaml --job home-documents
 bkpo runs --config /etc/backuppo/config.yaml
 ```
 
+Se hai configurato `api`, apri `http://127.0.0.1:8787` mentre il daemon è in
+esecuzione. Puoi anche avviare soltanto l'interfaccia con
+`bkpo serve --config /etc/backuppo/config.yaml`.
+
 ## Daemon Linux con systemd
 
 ```sh

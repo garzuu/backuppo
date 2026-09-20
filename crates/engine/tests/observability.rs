@@ -25,6 +25,7 @@ fn build_config(root: &std::path::Path) -> Config {
     jobs.insert(
         "documents".to_string(),
         JobConfig {
+            engine: Default::default(),
             source: SourceConfig::Folder {
                 path: source.to_string_lossy().to_string(),
                 exclude: Vec::new(),
@@ -53,6 +54,7 @@ fn build_config(root: &std::path::Path) -> Config {
             status_page: Some(root.join("state/status.html").to_string_lossy().to_string()),
         }),
         reports: Vec::new(),
+        api: None,
     }
 }
 

@@ -7,6 +7,7 @@ mod naming;
 mod notify;
 mod observability;
 pub mod report;
+mod restic;
 pub mod retention;
 mod runner;
 pub mod status;

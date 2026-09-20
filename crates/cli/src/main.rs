@@ -1,3 +1,4 @@
+mod api;
 mod daemon;
 #[cfg(windows)]
 mod windows_service;
@@ -55,6 +56,11 @@ enum Command {
         #[arg(long, value_name = "FILE")]
         config: PathBuf,
     },
+    /// Avvia solo l'API e la Web UI locale.
+    Serve {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+    },
     /// Elenca le esecuzioni registrate nello storico locale.
     Runs {
         #[arg(long, value_name = "FILE")]
@@ -89,6 +95,7 @@ async fn main() -> Result<()> {
         Command::Verify { config, job } => verify(&config, &job).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
         Command::Daemon { config } => daemon::run(load_config(&config)?).await,
+        Command::Serve { config } => api::serve(load_config(&config)?).await,
         Command::Runs { config, limit } => runs(&config, limit),
         Command::Logs { config, id } => logs(&config, id),
         #[cfg(windows)]

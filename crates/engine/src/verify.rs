@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use backuppo_core::config::Config;
+use backuppo_core::config::{Config, EngineKind};
 use backuppo_core::error::BackupError;
 use backuppo_core::model::JobEvent;
 use backuppo_core::traits::Destination;
@@ -10,7 +10,7 @@ use tracing::{info, instrument, warn};
 use crate::manifest::{self, Manifest, ManifestEntry};
 use crate::naming::extract_timestamp;
 use crate::observability::ExecutionObserver;
-use crate::{archive, notify, runner};
+use crate::{archive, notify, restic, runner};
 
 /// Numero massimo di file di cui viene ricalcolato lo sha256 durante la
 /// verifica (per archivi con molti file, evita di rileggerli tutti).
@@ -52,6 +52,10 @@ pub(crate) async fn verify_job_impl(
         .jobs
         .get(job_name)
         .ok_or_else(|| BackupError::Other(format!("job '{job_name}' non trovato in config")))?;
+
+    if job.engine == EngineKind::Restic {
+        return restic::verify(job_name, config).await;
+    }
 
     let dest_config = config.destinations.get(&job.destination).ok_or_else(|| {
         BackupError::Other(format!(
@@ -157,7 +161,7 @@ async fn find_latest(destination: &dyn Destination, job_name: &str) -> Result<St
 /// Confronta l'albero ripristinato in `extract_dir` col manifest incluso
 /// nell'archivio: numero di file, dimensioni di ognuno, checksum su un
 /// campione. Ritorna (file, byte totali, file di campione controllati).
-fn check_restored_tree(extract_dir: &Path) -> Result<(u64, u64, usize), BackupError> {
+pub(crate) fn check_restored_tree(extract_dir: &Path) -> Result<(u64, u64, usize), BackupError> {
     let manifest: Manifest = manifest::read(extract_dir)?;
 
     let mut total_bytes = 0u64;

@@ -22,6 +22,20 @@ pub struct Config {
     /// Report periodici generati dallo storico locale e inviati ai notifier.
     #[serde(default)]
     pub reports: Vec<ReportConfig>,
+    /// API HTTP e Web UI locale. Se assente, il server non viene avviato.
+    #[serde(default)]
+    pub api: Option<ApiConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiConfig {
+    /// Indirizzo di ascolto. Per sicurezza deve essere loopback.
+    #[serde(default = "default_api_bind")]
+    pub bind: String,
+}
+
+fn default_api_bind() -> String {
+    "127.0.0.1:8787".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +137,73 @@ pub enum DestinationConfig {
         #[serde(default)]
         bandwidth_limit_kib_s: Option<u64>,
     },
+    GoogleDrive {
+        #[serde(default)]
+        root: Option<String>,
+        access_token_env: String,
+        #[serde(default)]
+        refresh_token_env: Option<String>,
+        #[serde(default)]
+        client_id: Option<String>,
+        #[serde(default)]
+        client_secret_env: Option<String>,
+        #[serde(default)]
+        retry: RetryConfig,
+        #[serde(default)]
+        bandwidth_limit_kib_s: Option<u64>,
+    },
+    Dropbox {
+        #[serde(default)]
+        root: Option<String>,
+        access_token_env: String,
+        #[serde(default)]
+        refresh_token_env: Option<String>,
+        #[serde(default)]
+        client_id: Option<String>,
+        #[serde(default)]
+        client_secret_env: Option<String>,
+        #[serde(default)]
+        retry: RetryConfig,
+        #[serde(default)]
+        bandwidth_limit_kib_s: Option<u64>,
+    },
+    OneDrive {
+        #[serde(default)]
+        root: Option<String>,
+        access_token_env: String,
+        #[serde(default)]
+        refresh_token_env: Option<String>,
+        #[serde(default)]
+        client_id: Option<String>,
+        #[serde(default)]
+        client_secret_env: Option<String>,
+        #[serde(default)]
+        retry: RetryConfig,
+        #[serde(default)]
+        bandwidth_limit_kib_s: Option<u64>,
+    },
+    /// Repository Restic. Viene usato dai job con `engine: restic` e non
+    /// costruisce una destination archivio tradizionale.
+    Restic {
+        repository: String,
+        password_env: String,
+        /// Variabili richieste dal backend Restic: la chiave è il nome che
+        /// Restic riceve, il valore è il nome della variabile sorgente.
+        #[serde(default)]
+        environment: HashMap<String, String>,
+        #[serde(default = "default_restic_binary")]
+        binary: String,
+        #[serde(default = "default_true")]
+        initialize: bool,
+    },
+}
+
+fn default_restic_binary() -> String {
+    "restic".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_sftp_port() -> u16 {
@@ -217,6 +298,18 @@ pub enum SourceConfig {
         #[serde(default = "default_command_output_filename")]
         output_filename: String,
     },
+    /// Immagine byte-per-byte di un file o device a blocchi.
+    DiskImage {
+        path: String,
+        #[serde(default = "default_disk_image_filename")]
+        output_filename: String,
+    },
+    /// VM libvirt spenta: salva XML e tutti i dischi elencati da `virsh`.
+    LibvirtVm {
+        name: String,
+        #[serde(default = "default_virsh_binary")]
+        virsh_binary: String,
+    },
 }
 
 fn default_postgres_port() -> u16 {
@@ -229,6 +322,22 @@ fn default_mysql_port() -> u16 {
 
 fn default_command_output_filename() -> String {
     "output".to_string()
+}
+
+fn default_disk_image_filename() -> String {
+    "disk.img".to_string()
+}
+
+fn default_virsh_binary() -> String {
+    "virsh".to_string()
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EngineKind {
+    #[default]
+    Archive,
+    Restic,
 }
 
 #[derive(Debug, Deserialize)]
@@ -283,6 +392,10 @@ pub struct NotifyConfig {
 pub struct JobConfig {
     pub source: SourceConfig,
     pub destination: String,
+    /// `archive` mantiene il formato Backuppo; `restic` usa il repository
+    /// Restic configurato come destination per deduplica e incrementali.
+    #[serde(default)]
+    pub engine: EngineKind,
     #[serde(default)]
     pub compression: Option<Compression>,
     #[serde(default)]

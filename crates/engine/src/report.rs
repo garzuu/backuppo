@@ -124,6 +124,7 @@ mod tests {
                 status_page: None,
             }),
             reports: Vec::new(),
+            api: None,
         };
 
         let JobEvent::Report { summary } = build(&config, 7).expect("report") else {

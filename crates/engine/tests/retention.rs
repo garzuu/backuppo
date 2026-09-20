@@ -21,6 +21,7 @@ fn build_config(dst: &std::path::Path, retention: Retention) -> Config {
     jobs.insert(
         "documents".to_string(),
         JobConfig {
+            engine: Default::default(),
             source: SourceConfig::Folder {
                 path: "/unused".to_string(),
                 exclude: vec![],
@@ -44,6 +45,7 @@ fn build_config(dst: &std::path::Path, retention: Retention) -> Config {
         jobs,
         observability: None,
         reports: Vec::new(),
+        api: None,
     }
 }
 

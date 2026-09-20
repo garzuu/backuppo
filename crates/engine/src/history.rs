@@ -4,7 +4,7 @@ use backuppo_core::error::BackupError;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 /// Riga dello storico locale, usata anche dai comandi CLI `runs` e `logs`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ExecutionRecord {
     pub id: i64,
     pub job: String,

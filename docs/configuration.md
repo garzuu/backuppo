@@ -66,6 +66,41 @@ quello richiesto da MinIO e dagli storage self-hosted.
     bandwidth_limit_kib_s: 5120
 ```
 
+### Google Drive, Dropbox e OneDrive
+
+I tre backend usano OAuth. Il token di accesso è obbligatorio; per un daemon
+continuativo configura anche refresh token, client ID e client secret:
+
+```yaml
+  drive:
+    type: google_drive            # oppure dropbox | one_drive
+    root: /backuppo
+    access_token_env: DRIVE_ACCESS_TOKEN
+    refresh_token_env: DRIVE_REFRESH_TOKEN
+    client_id: application-client-id
+    client_secret_env: DRIVE_CLIENT_SECRET
+    retry: { max_times: 5 }
+    bandwidth_limit_kib_s: 5120
+```
+
+### Restic incrementale
+
+Restic conserva chunk deduplicati e snapshot incrementali. Il binario `restic`
+deve essere nel `PATH`; `initialize` crea il repository al primo backup.
+
+```yaml
+  incremental:
+    type: restic
+    repository: s3:https://s3.example.com/backups/restic
+    password_env: RESTIC_PASSWORD
+    initialize: true
+    environment:
+      AWS_ACCESS_KEY_ID: S3_ACCESS_KEY_ID
+      AWS_SECRET_ACCESS_KEY: S3_SECRET_ACCESS_KEY
+```
+
+I valori di `environment` sono nomi di variabili, mai segreti letterali.
+
 ## Sorgenti
 
 ```yaml
@@ -100,7 +135,13 @@ source:
   command: /usr/local/bin/export-data
   args: ["--format", "json"]
   output_filename: export.json
+source: { type: disk_image, path: /dev/disk/by-id/example, output_filename: disk.img }
+source: { type: libvirt_vm, name: app-vm }
 ```
+
+`disk_image` copia byte per byte un file o device. `libvirt_vm` salva XML e
+dischi elencati da `virsh`; la VM deve essere spenta per evitare immagini
+inconsistenti. Hook `pre` e `post` possono gestire l'arresto e il riavvio.
 
 ## Job
 
@@ -109,6 +150,7 @@ jobs:
   documents:
     source: { type: folder, path: /srv/documents }
     destination: local
+    engine: archive               # archive (default) | restic
     compression: zstd            # zstd | none; default zstd
     encryption:
       type: age                  # age | none
@@ -127,6 +169,9 @@ jobs:
       on_failure: [ops-email, ops-telegram]
       on_verify: [ops-email]
 ```
+
+Con `engine: restic`, `destination` deve riferirsi a una destination
+`type: restic`; compressione e cifratura sono gestite da Restic.
 
 Un hook `pre` fallito interrompe il job. Un hook `post` fallito viene
 registrato, ma non invalida un archivio già caricato e verificato.
@@ -170,3 +215,17 @@ reports:
 
 Senza `observability` l'agent continua a funzionare, ma non scrive storico o
 pagina HTML. I report richiedono lo storico e vengono eseguiti dal daemon.
+
+## API e Web UI locale
+
+```yaml
+api:
+  bind: 127.0.0.1:8787
+```
+
+Il daemon avvia automaticamente l'interfaccia su quell'indirizzo. In
+alternativa usa `bkpo serve --config config.yaml`. L'API espone
+`GET /api/v1/status`, `GET /api/v1/runs`, `GET /api/v1/runs/{id}` e
+`POST /api/v1/jobs/{nome}/run`. Per evitare esposizioni accidentali il bind
+accetta solo indirizzi IP loopback. La richiesta `POST` richiede anche
+l'header `X-Backuppo-UI: 1`, usato dalla UI per impedire trigger cross-site.

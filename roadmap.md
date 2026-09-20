@@ -173,10 +173,10 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 10 — Dopo l'MVP (da valutare)
 
-- [ ] Motore incrementale/dedup (chunking, oppure integrazione restic)
-- [ ] Web UI leggera sopra un'API locale dell'agent (stato, log, avvio manuale)
-- [ ] Google Drive / Dropbox / OneDrive (via opendal)
-- [ ] Immagini disco / VM (solo se c'è domanda reale)
+- [x] Motore incrementale/dedup (integrazione Restic)
+- [x] Web UI leggera sopra un'API locale dell'agent (stato, log, avvio manuale)
+- [x] Google Drive / Dropbox / OneDrive (via opendal)
+- [x] Immagini disco / VM (file/device e VM libvirt spente)
 
 ## Fase 11 — Hub multi-sito (dopo `v0.1.0` stabile)
 

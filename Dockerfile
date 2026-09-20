@@ -7,7 +7,7 @@ RUN cargo build --locked --release --package backuppo
 
 FROM alpine:3.22
 
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates restic tzdata \
     && addgroup -S backuppo \
     && adduser -S -G backuppo -h /var/lib/backuppo backuppo \
     && mkdir -p /etc/backuppo /var/lib/backuppo \

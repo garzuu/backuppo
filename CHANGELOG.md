@@ -2,6 +2,13 @@
 
 Tutte le modifiche rilevanti sono documentate in questo file.
 
+## [Unreleased]
+
+- Motore Restic opzionale per snapshot incrementali e deduplicati.
+- API e Web UI locale con stato, storico e avvio manuale dei job.
+- Destinazioni Google Drive, Dropbox e OneDrive tramite OAuth.
+- Sorgenti per immagini disco e VM libvirt spente.
+
 ## [0.1.0] - 2026-09-20
 
 Prima release stabile dell'agent Backuppo.
