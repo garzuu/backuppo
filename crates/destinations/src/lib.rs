@@ -9,9 +9,9 @@ mod webdav;
 pub use opendal_backed::OpendalDestination;
 pub use sftp::SftpDestination;
 
-use backupper_core::config::DestinationConfig;
-use backupper_core::error::BackupError;
-use backupper_core::traits::Destination;
+use backuppo_core::config::DestinationConfig;
+use backuppo_core::error::BackupError;
+use backuppo_core::traits::Destination;
 
 /// Costruisce l'implementazione di `Destination` corrispondente alla config.
 pub fn build(config: &DestinationConfig) -> Result<Box<dyn Destination>, BackupError> {

@@ -208,7 +208,7 @@ pub struct JobConfig {
     #[serde(default)]
     pub verify_restore: Option<VerifyRestore>,
     /// Soglia (in ore) oltre la quale l'ultimo backup disponibile è
-    /// considerato troppo vecchio: `backupper verify` segnala un allarme
+    /// considerato troppo vecchio: `bkpo verify` segnala un allarme
     /// (non bloccante) se superata.
     #[serde(default)]
     pub max_backup_age_hours: Option<u64>,

@@ -3,15 +3,15 @@ mod daemon;
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
-use backupper_core::config::{validate, Config};
-use backupper_core::model::JobEvent;
+use backuppo_core::config::{validate, Config};
+use backuppo_core::model::JobEvent;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
-    name = "backupper",
+    name = "bkpo",
     version,
-    about = "Backup tool cross-platform con verifica automatica del restore"
+    about = "Backuppo: backup tool cross-platform con verifica automatica del restore"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -116,7 +116,7 @@ fn check(path: &PathBuf) -> Result<()> {
 async fn run(config_path: &PathBuf, job_name: &str) -> Result<()> {
     let config = load_config(config_path)?;
 
-    match backupper_engine::run_job(job_name, &config).await {
+    match backuppo_engine::run_job(job_name, &config).await {
         Ok(artifact) => {
             let event = JobEvent::Success {
                 job: job_name.to_string(),
@@ -139,7 +139,7 @@ async fn run(config_path: &PathBuf, job_name: &str) -> Result<()> {
 async fn verify(config_path: &PathBuf, job_name: &str) -> Result<()> {
     let config = load_config(config_path)?;
 
-    match backupper_engine::verify_job(job_name, &config).await {
+    match backuppo_engine::verify_job(job_name, &config).await {
         Ok(event) => {
             println!("{event}");
             Ok(())
@@ -169,7 +169,7 @@ async fn notify_test(config_path: &PathBuf, notifier_name: Option<&str>) -> Resu
     }
 
     let event = JobEvent::Report {
-        summary: "backupper: messaggio di prova (notify-test)".to_string(),
+        summary: "backuppo: messaggio di prova (notify-test)".to_string(),
     };
 
     let mut any_failed = false;
@@ -180,7 +180,7 @@ async fn notify_test(config_path: &PathBuf, notifier_name: Option<&str>) -> Resu
             continue;
         };
 
-        match backupper_notifiers::build(notifier_config) {
+        match backuppo_notifiers::build(notifier_config) {
             Ok(notifier) => match notifier.send(&event).await {
                 Ok(()) => println!("notifier '{name}': OK"),
                 Err(e) => {

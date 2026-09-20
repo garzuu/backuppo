@@ -2,10 +2,10 @@ use std::path::Path;
 use std::sync::Once;
 
 use async_trait::async_trait;
-use backupper_core::config::RetryConfig;
-use backupper_core::error::BackupError;
-use backupper_core::model::Artifact;
-use backupper_core::traits::Destination;
+use backuppo_core::config::RetryConfig;
+use backuppo_core::error::BackupError;
+use backuppo_core::model::Artifact;
+use backuppo_core::traits::Destination;
 use opendal::layers::{RetryLayer, ThrottleLayer};
 use opendal::Operator;
 use tokio::io::AsyncReadExt;

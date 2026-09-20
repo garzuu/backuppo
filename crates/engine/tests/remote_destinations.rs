@@ -1,13 +1,13 @@
 //! Test di integrazione "live" contro servizi reali (via Docker) per la
 //! Fase 6: prova che lo stesso identico job funzioni verso locale, SFTP e S3
 //! cambiando solo la `destination`. Richiede:
-//!   docker run -d --name backupper-sftp-test -p 2222:22 \
+//!   docker run -d --name backuppo-sftp-test -p 2222:22 \
 //!     -e SFTP_USERS="testuser:testpass:::upload" atmoz/sftp
-//!   docker run -d --name backupper-minio-test -p 9000:9000 \
+//!   docker run -d --name backuppo-minio-test -p 9000:9000 \
 //!     -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
 //!     quay.io/minio/minio server /data
-//!   (poi creare il bucket "backupper-test" col client `mc`)
-//!   docker run -d --name backupper-webdav-test -p 8080:80 \
+//!   (poi creare il bucket "backuppo-test" col client `mc`)
+//!   docker run -d --name backuppo-webdav-test -p 8080:80 \
 //!     -e USERNAME=testuser -e PASSWORD=testpass bytemark/webdav
 //!
 //! Se i servizi non sono raggiungibili (es. in CI senza Docker), i test
@@ -19,13 +19,13 @@ use std::fs;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
-use backupper_core::config::{
+use backuppo_core::config::{
     Compression, Config, DestinationConfig, EncryptionConfig, JobConfig, NotifyConfig, Retention,
     RetryConfig, SourceConfig, VerifyRestore,
 };
-use backupper_core::model::Artifact;
-use backupper_core::traits::Destination;
-use backupper_engine::{run_job, verify_job};
+use backuppo_core::model::Artifact;
+use backuppo_core::traits::Destination;
+use backuppo_engine::{run_job, verify_job};
 
 fn is_reachable(addr: &str) -> bool {
     match addr.parse::<SocketAddr>() {
@@ -120,7 +120,7 @@ async fn assert_retention_prunes_old_backups(
     job_name: &str,
     make_destination: impl Fn() -> DestinationConfig,
 ) {
-    let dest = backupper_destinations::build(&make_destination()).expect("destination costruibile");
+    let dest = backuppo_destinations::build(&make_destination()).expect("destination costruibile");
     let seed_dir = tempfile::tempdir().unwrap();
     let base = 1_700_000_000u64;
     const DAY: u64 = 24 * 3600;
@@ -158,7 +158,7 @@ async fn assert_retention_prunes_old_backups(
         jobs,
     };
 
-    let summary = backupper_engine::retention::apply(job_name, &config)
+    let summary = backuppo_engine::retention::apply(job_name, &config)
         .await
         .expect("la retention deve applicarsi senza errori");
     assert_eq!(summary.kept, 2);
@@ -209,7 +209,7 @@ async fn retention_prunes_old_backups_on_s3() {
         std::env::set_var("BACKUPPER_S3_RETENTION_SECRET_KEY", "minioadmin");
     }
     assert_retention_prunes_old_backups("retention-s3", || DestinationConfig::S3 {
-        bucket: "backupper-test".to_string(),
+        bucket: "backuppo-test".to_string(),
         region: Some("us-east-1".to_string()),
         endpoint: Some("http://127.0.0.1:9000".to_string()),
         access_key_id_env: "BACKUPPER_S3_RETENTION_ACCESS_KEY".to_string(),
@@ -318,7 +318,7 @@ async fn same_job_works_against_s3_destination() {
         src_dir.path(),
         "s3-test",
         DestinationConfig::S3 {
-            bucket: "backupper-test".to_string(),
+            bucket: "backuppo-test".to_string(),
             region: Some("us-east-1".to_string()),
             endpoint: Some("http://127.0.0.1:9000".to_string()),
             access_key_id_env: "BACKUPPER_S3_TEST_ACCESS_KEY".to_string(),

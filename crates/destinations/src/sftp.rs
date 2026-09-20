@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use backon::{ExponentialBuilder, Retryable};
-use backupper_core::config::RetryConfig;
-use backupper_core::error::BackupError;
-use backupper_core::model::Artifact;
-use backupper_core::secrets::resolve_env;
-use backupper_core::traits::Destination;
+use backuppo_core::config::RetryConfig;
+use backuppo_core::error::BackupError;
+use backuppo_core::model::Artifact;
+use backuppo_core::secrets::resolve_env;
+use backuppo_core::traits::Destination;
 use russh::client::{self, Handle, Handler};
 use russh::keys::ssh_key::PublicKey;
 use russh::keys::{load_secret_key, HashAlg, PrivateKeyWithHashAlg};

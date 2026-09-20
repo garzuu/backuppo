@@ -1,4 +1,4 @@
-# Schema target per la configurazione di backupper.
+# Schema target per la configurazione di backuppo.
 # I segreti non vanno mai scritti qui in chiaro: si referenziano tramite
 # variabili d'ambiente con i campi *_env.
 
@@ -16,7 +16,7 @@ destinations:
     # Storage Box supporta entrambe). Con key_path, key_passphrase_env è
     # opzionale (solo se la chiave privata è cifrata).
     password_env: HETZNER_SFTP_PASSWORD
-    # key_path: /etc/backupper/keys/hetzner_id_ed25519
+    # key_path: /etc/backuppo/keys/hetzner_id_ed25519
     root: /backups
     # Fingerprint SHA256 della host key (formato OpenSSH): consigliata in
     # produzione, altrimenti la host key viene accettata senza verifica.

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
 
-use backupper_core::config::{
+use backuppo_core::config::{
     Compression, Config, DestinationConfig, JobConfig, NotifyConfig, Retention, SourceConfig,
 };
-use backupper_engine::run_and_retain;
+use backuppo_engine::run_and_retain;
 
 const DAY: u64 = 24 * 3600;
 
@@ -74,7 +74,7 @@ async fn failed_run_never_triggers_retention() {
     assert_eq!(backup_count(dst_dir.path()), 5);
 
     // Sorgente inesistente: il job fallisce prima ancora di caricare nulla.
-    let missing_src = std::path::PathBuf::from("/tmp/backupper-test-does-not-exist-retain");
+    let missing_src = std::path::PathBuf::from("/tmp/backuppo-test-does-not-exist-retain");
     let config = build_config(&missing_src, dst_dir.path());
 
     let err = run_and_retain("documents", &config)

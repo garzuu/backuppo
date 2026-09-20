@@ -1,9 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use backupper_core::config::{Compression, Config, EncryptionConfig, VerifyRestore};
-use backupper_core::error::BackupError;
-use backupper_core::model::{Artifact, JobEvent};
-use backupper_core::secrets::resolve_env;
+use backuppo_core::config::{Compression, Config, EncryptionConfig, VerifyRestore};
+use backuppo_core::error::BackupError;
+use backuppo_core::model::{Artifact, JobEvent};
+use backuppo_core::secrets::resolve_env;
 use tracing::{info, instrument};
 
 use crate::{archive, manifest, notify, verify};
@@ -53,8 +53,8 @@ async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, Backu
         ))
     })?;
 
-    let source = backupper_sources::build(&job.source)?;
-    let destination = backupper_destinations::build(dest_config)?;
+    let source = backuppo_sources::build(&job.source)?;
+    let destination = backuppo_destinations::build(dest_config)?;
 
     let staging_root = tempfile::tempdir()?;
     let staging_data = staging_root.path().join("data");

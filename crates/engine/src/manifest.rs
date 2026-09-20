@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use backupper_core::error::BackupError;
+use backuppo_core::error::BackupError;
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
@@ -9,7 +9,7 @@ use crate::archive;
 /// Nome del file (nascosto) che accompagna ogni archivio con l'elenco dei
 /// file sorgente e il loro checksum, usato da `verify` per controllare che
 /// il restore sia integro.
-pub const MANIFEST_FILENAME: &str = ".backupper-manifest.json";
+pub const MANIFEST_FILENAME: &str = ".backuppo-manifest.json";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ManifestEntry {

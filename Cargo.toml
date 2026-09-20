@@ -13,11 +13,11 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/CHANGEME/backupper"
+repository = "https://github.com/CHANGEME/backuppo"
 
 [workspace.dependencies]
-backupper-core = { path = "crates/core" }
-backupper-engine = { path = "crates/engine" }
-backupper-sources = { path = "crates/sources" }
-backupper-destinations = { path = "crates/destinations" }
-backupper-notifiers = { path = "crates/notifiers" }
+backuppo-core = { path = "crates/core" }
+backuppo-engine = { path = "crates/engine" }
+backuppo-sources = { path = "crates/sources" }
+backuppo-destinations = { path = "crates/destinations" }
+backuppo-notifiers = { path = "crates/notifiers" }

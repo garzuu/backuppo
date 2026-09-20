@@ -6,9 +6,9 @@ mod telegram;
 pub use smtp::SmtpNotifier;
 pub use telegram::TelegramNotifier;
 
-use backupper_core::config::NotifierConfig;
-use backupper_core::error::BackupError;
-use backupper_core::traits::Notifier;
+use backuppo_core::config::NotifierConfig;
+use backuppo_core::error::BackupError;
+use backuppo_core::traits::Notifier;
 
 /// Costruisce l'implementazione di `Notifier` corrispondente alla config.
 pub fn build(config: &NotifierConfig) -> Result<Box<dyn Notifier>, BackupError> {

@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use backupper_core::error::BackupError;
-use backupper_core::model::Artifact;
-use backupper_core::traits::Source;
+use backuppo_core::error::BackupError;
+use backuppo_core::model::Artifact;
+use backuppo_core::traits::Source;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use walkdir::WalkDir;
 

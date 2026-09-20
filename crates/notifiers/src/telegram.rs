@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use backupper_core::error::BackupError;
-use backupper_core::model::JobEvent;
-use backupper_core::secrets::resolve_env;
-use backupper_core::traits::Notifier;
+use backuppo_core::error::BackupError;
+use backuppo_core::model::JobEvent;
+use backuppo_core::secrets::resolve_env;
+use backuppo_core::traits::Notifier;
 use reqwest::Client;
 use serde::Serialize;
 

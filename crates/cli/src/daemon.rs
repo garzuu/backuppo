@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use backupper_core::config::Config;
+use backuppo_core::config::Config;
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{info, warn};
@@ -87,7 +87,7 @@ async fn run_one_tick(
 
     // `run_and_retain` applica la retention solo se il backup ha successo,
     // e logga già gli errori di job/retention: qui non c'è altro da fare.
-    let _ = backupper_engine::run_and_retain(&job_name, &config).await;
+    let _ = backuppo_engine::run_and_retain(&job_name, &config).await;
 }
 
 async fn wait_for_shutdown_signal() {
@@ -116,7 +116,7 @@ async fn wait_for_shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use backupper_core::config::{
+    use backuppo_core::config::{
         Compression, DestinationConfig, JobConfig, NotifyConfig, Retention, SourceConfig,
     };
     use std::fs;

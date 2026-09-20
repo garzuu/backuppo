@@ -269,15 +269,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "backupper"
+name = "backuppo"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backupper-core",
- "backupper-destinations",
- "backupper-engine",
- "backupper-notifiers",
- "backupper-sources",
+ "backuppo-core",
+ "backuppo-destinations",
+ "backuppo-engine",
+ "backuppo-notifiers",
+ "backuppo-sources",
  "clap",
  "tempfile",
  "tokio",
@@ -287,7 +287,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "backupper-core"
+name = "backuppo-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -298,12 +298,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "backupper-destinations"
+name = "backuppo-destinations"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "backon",
- "backupper-core",
+ "backuppo-core",
  "opendal",
  "russh",
  "russh-sftp",
@@ -313,14 +313,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "backupper-engine"
+name = "backuppo-engine"
 version = "0.1.0"
 dependencies = [
  "age",
- "backupper-core",
- "backupper-destinations",
- "backupper-notifiers",
- "backupper-sources",
+ "backuppo-core",
+ "backuppo-destinations",
+ "backuppo-notifiers",
+ "backuppo-sources",
  "chrono",
  "serde",
  "serde_json",
@@ -334,11 +334,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "backupper-notifiers"
+name = "backuppo-notifiers"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "backupper-core",
+ "backuppo-core",
  "lettre",
  "reqwest",
  "serde",
@@ -348,11 +348,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "backupper-sources"
+name = "backuppo-sources"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "backupper-core",
+ "backuppo-core",
  "globset",
  "tokio",
  "walkdir",

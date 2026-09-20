@@ -4,7 +4,7 @@ use std::path::Path;
 
 use age::secrecy::SecretString;
 use age::Identity;
-use backupper_core::error::BackupError;
+use backuppo_core::error::BackupError;
 use sha2::{Digest, Sha256};
 
 /// Scrittore che, se una passphrase è presente, cifra tutto ciò che vi viene

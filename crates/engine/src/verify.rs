@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use backupper_core::config::Config;
-use backupper_core::error::BackupError;
-use backupper_core::model::JobEvent;
-use backupper_core::traits::Destination;
+use backuppo_core::config::Config;
+use backuppo_core::error::BackupError;
+use backuppo_core::model::JobEvent;
+use backuppo_core::traits::Destination;
 use tracing::{info, instrument, warn};
 
 use crate::manifest::{self, Manifest, ManifestEntry};
@@ -55,7 +55,7 @@ pub(crate) async fn verify_job_impl(
             job.destination
         ))
     })?;
-    let destination = backupper_destinations::build(dest_config)?;
+    let destination = backuppo_destinations::build(dest_config)?;
 
     let name = find_latest(destination.as_ref(), job_name).await?;
     check_age(job_name, &name, job.max_backup_age_hours);

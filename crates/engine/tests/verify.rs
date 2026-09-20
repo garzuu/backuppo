@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::fs;
 
-use backupper_core::config::{
+use backuppo_core::config::{
     Compression, Config, DestinationConfig, JobConfig, NotifyConfig, Retention, SourceConfig,
     VerifyRestore,
 };
-use backupper_core::model::JobEvent;
-use backupper_engine::{run_job, verify_job};
+use backuppo_core::model::JobEvent;
+use backuppo_engine::{run_job, verify_job};
 
 fn write_file(path: &std::path::Path, content: &str) {
     if let Some(parent) = path.parent() {

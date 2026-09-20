@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
 
-use backupper_core::config::{
+use backuppo_core::config::{
     Compression, Config, DestinationConfig, EncryptionConfig, JobConfig, NotifyConfig, Retention,
     SourceConfig,
 };
-use backupper_engine::{archive, run_job};
+use backuppo_engine::{archive, run_job};
 
 fn write_file(path: &std::path::Path, content: &str) {
     if let Some(parent) = path.parent() {
@@ -81,7 +81,7 @@ fn collect_files(root: &std::path::Path) -> Vec<String> {
         })
         // il manifest è un dettaglio implementativo dell'engine, non fa
         // parte del contenuto originale della sorgente.
-        .filter(|rel| rel != backupper_engine::MANIFEST_FILENAME)
+        .filter(|rel| rel != backuppo_engine::MANIFEST_FILENAME)
         .collect()
 }
 

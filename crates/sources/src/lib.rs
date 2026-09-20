@@ -4,9 +4,9 @@ mod folder;
 
 pub use folder::FolderSource;
 
-use backupper_core::config::SourceConfig;
-use backupper_core::error::BackupError;
-use backupper_core::traits::Source;
+use backuppo_core::config::SourceConfig;
+use backuppo_core::error::BackupError;
+use backuppo_core::traits::Source;
 
 /// Costruisce l'implementazione di `Source` corrispondente alla config.
 pub fn build(config: &SourceConfig) -> Result<Box<dyn Source>, BackupError> {

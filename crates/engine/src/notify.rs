@@ -1,5 +1,5 @@
-use backupper_core::config::Config;
-use backupper_core::model::JobEvent;
+use backuppo_core::config::Config;
+use backuppo_core::model::JobEvent;
 use tracing::warn;
 
 /// Invia `event` a ciascun notifier elencato in `names` (nomi presenti in
@@ -15,7 +15,7 @@ pub(crate) async fn dispatch(config: &Config, names: &[String], event: &JobEvent
             continue;
         };
 
-        match backupper_notifiers::build(notifier_config) {
+        match backuppo_notifiers::build(notifier_config) {
             Ok(notifier) => {
                 if let Err(e) = notifier.send(event).await {
                     warn!(notifier = name.as_str(), error = %e, "invio notifica fallito");

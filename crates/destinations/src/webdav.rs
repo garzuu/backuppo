@@ -1,6 +1,6 @@
-use backupper_core::config::RetryConfig;
-use backupper_core::error::BackupError;
-use backupper_core::secrets::resolve_env;
+use backuppo_core::config::RetryConfig;
+use backuppo_core::error::BackupError;
+use backuppo_core::secrets::resolve_env;
 use opendal::services::Webdav;
 use opendal::Operator;
 

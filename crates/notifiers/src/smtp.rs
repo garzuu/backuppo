@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use backupper_core::error::BackupError;
-use backupper_core::model::JobEvent;
-use backupper_core::secrets::resolve_env;
-use backupper_core::traits::Notifier;
+use backuppo_core::error::BackupError;
+use backuppo_core::model::JobEvent;
+use backuppo_core::secrets::resolve_env;
+use backuppo_core::traits::Notifier;
 use lettre::message::Mailbox;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
@@ -103,10 +103,10 @@ impl Notifier for SmtpNotifier {
 
 fn subject_for(event: &JobEvent) -> String {
     match event {
-        JobEvent::Success { job, .. } => format!("[backupper] backup riuscito: {job}"),
-        JobEvent::Failure { job, .. } => format!("[backupper] backup FALLITO: {job}"),
-        JobEvent::RestoreVerified { job, .. } => format!("[backupper] restore verificato: {job}"),
-        JobEvent::Report { .. } => "[backupper] report".to_string(),
+        JobEvent::Success { job, .. } => format!("[backuppo] backup riuscito: {job}"),
+        JobEvent::Failure { job, .. } => format!("[backuppo] backup FALLITO: {job}"),
+        JobEvent::RestoreVerified { job, .. } => format!("[backuppo] restore verificato: {job}"),
+        JobEvent::Report { .. } => "[backuppo] report".to_string(),
     }
 }
 
@@ -203,7 +203,7 @@ mod tests {
             .expect("l'invio deve avere successo");
 
         let body = body_rx.await.expect("il server deve aver ricevuto un DATA");
-        assert!(body.contains("Subject: [backupper] backup FALLITO: documents"));
+        assert!(body.contains("Subject: [backuppo] backup FALLITO: documents"));
         assert!(body.contains("job 'documents': backup fallito: disco pieno"));
     }
 }

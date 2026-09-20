@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use backupper_core::error::BackupError;
+use backuppo_core::error::BackupError;
 use opendal::services::Fs;
 use opendal::Operator;
 

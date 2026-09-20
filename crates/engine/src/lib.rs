@@ -8,9 +8,9 @@ pub mod retention;
 mod runner;
 mod verify;
 
-use backupper_core::config::Config;
-use backupper_core::error::BackupError;
-use backupper_core::model::Artifact;
+use backuppo_core::config::Config;
+use backuppo_core::error::BackupError;
+use backuppo_core::model::Artifact;
 use tracing::warn;
 
 pub use manifest::MANIFEST_FILENAME;

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use backupper_core::config::Config;
-use backupper_core::error::BackupError;
+use backuppo_core::config::Config;
+use backuppo_core::error::BackupError;
 use chrono::{DateTime, Datelike, Utc};
 use tracing::{info, instrument};
 
@@ -39,7 +39,7 @@ pub async fn apply(job_name: &str, config: &Config) -> Result<RetentionSummary, 
             job.destination
         ))
     })?;
-    let destination = backupper_destinations::build(dest_config)?;
+    let destination = backuppo_destinations::build(dest_config)?;
 
     let prefix = format!("{job_name}-");
     let mut backups: Vec<(String, u64)> = destination

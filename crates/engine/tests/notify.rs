@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
 
-use backupper_core::config::{
+use backuppo_core::config::{
     Compression, Config, DestinationConfig, JobConfig, NotifierConfig, NotifyConfig, Retention,
     SourceConfig,
 };
-use backupper_engine::run_job;
+use backuppo_engine::run_job;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
@@ -145,7 +145,7 @@ async fn failed_job_notifies_all_failure_channels() {
     let (escalation_port, escalation_probe) = spawn_connection_probe().await;
 
     // Sorgente inesistente: il job fallisce già in fase di preparazione.
-    let missing_src = std::path::PathBuf::from("/tmp/backupper-test-does-not-exist-xyz");
+    let missing_src = std::path::PathBuf::from("/tmp/backuppo-test-does-not-exist-xyz");
     let dst_dir = tempfile::tempdir().unwrap();
     let config = build_config(&missing_src, dst_dir.path(), primary_port, escalation_port);
 

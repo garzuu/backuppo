@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
 
-use backupper_core::config::{
+use backuppo_core::config::{
     Compression, Config, DestinationConfig, JobConfig, NotifyConfig, Retention, SourceConfig,
 };
-use backupper_engine::retention::apply;
+use backuppo_engine::retention::apply;
 
 const DAY: u64 = 24 * 3600;
 
