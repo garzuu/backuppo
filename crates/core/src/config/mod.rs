@@ -36,8 +36,29 @@ pub enum DestinationConfig {
         #[serde(default = "default_sftp_port")]
         port: u16,
         user: String,
-        password_env: String,
+        /// Autenticazione a password: almeno uno tra `password_env` e
+        /// `key_path` è obbligatorio (validato in `validate`).
+        #[serde(default)]
+        password_env: Option<String>,
+        /// Percorso locale della chiave privata (autenticazione a chiave).
+        #[serde(default)]
+        key_path: Option<String>,
+        /// Passphrase della chiave privata, se cifrata.
+        #[serde(default)]
+        key_passphrase_env: Option<String>,
         root: String,
+        /// Fingerprint SHA256 attesa della host key (formato OpenSSH,
+        /// `SHA256:...`). Se assente, la host key viene accettata senza
+        /// verifica (loggando un avviso): consigliato impostarla in
+        /// produzione per evitare attacchi man-in-the-middle.
+        #[serde(default)]
+        host_key_fingerprint: Option<String>,
+        #[serde(default)]
+        retry: RetryConfig,
+        /// Limite di banda opzionale in KiB/s per upload/download
+        /// (best-effort: alcuni backend possono superarlo su file piccoli).
+        #[serde(default)]
+        bandwidth_limit_kib_s: Option<u64>,
     },
     S3 {
         bucket: String,
@@ -47,6 +68,18 @@ pub enum DestinationConfig {
         endpoint: Option<String>,
         access_key_id_env: String,
         secret_access_key_env: String,
+        /// Prefisso delle chiavi dentro il bucket (default: radice).
+        #[serde(default)]
+        root: Option<String>,
+        /// Stile "virtual-hosted" (`bucket.endpoint`) invece del default
+        /// "path-style" (`endpoint/bucket`, usato da MinIO e dalla maggior
+        /// parte dei provider self-hosted). AWS S3 supporta entrambi.
+        #[serde(default)]
+        virtual_host_style: bool,
+        #[serde(default)]
+        retry: RetryConfig,
+        #[serde(default)]
+        bandwidth_limit_kib_s: Option<u64>,
     },
     Webdav {
         url: String,
@@ -54,11 +87,35 @@ pub enum DestinationConfig {
         user: Option<String>,
         #[serde(default)]
         password_env: Option<String>,
+        #[serde(default)]
+        retry: RetryConfig,
+        #[serde(default)]
+        bandwidth_limit_kib_s: Option<u64>,
     },
 }
 
 fn default_sftp_port() -> u16 {
     22
+}
+
+/// Retry con backoff esponenziale sulle operazioni di rete verso una
+/// destination remota.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RetryConfig {
+    #[serde(default = "default_retry_max_times")]
+    pub max_times: usize,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_times: default_retry_max_times(),
+        }
+    }
+}
+
+fn default_retry_max_times() -> usize {
+    3
 }
 
 #[derive(Debug, Deserialize)]

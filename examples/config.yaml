@@ -12,8 +12,27 @@ destinations:
     host: u123456.your-storagebox.de
     port: 23
     user: u123456
+    # Autenticazione: almeno uno tra password_env e key_path (Hetzner
+    # Storage Box supporta entrambe). Con key_path, key_passphrase_env è
+    # opzionale (solo se la chiave privata è cifrata).
     password_env: HETZNER_SFTP_PASSWORD
+    # key_path: /etc/backupper/keys/hetzner_id_ed25519
     root: /backups
+    # Fingerprint SHA256 della host key (formato OpenSSH): consigliata in
+    # produzione, altrimenti la host key viene accettata senza verifica.
+    host_key_fingerprint: "SHA256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    retry:
+      max_times: 5
+    bandwidth_limit_kib_s: 5120 # 5 MiB/s
+
+  backblaze-b2:
+    type: s3
+    bucket: my-backups
+    region: us-west-002
+    endpoint: https://s3.us-west-002.backblazeb2.com
+    access_key_id_env: B2_KEY_ID
+    secret_access_key_env: B2_APPLICATION_KEY
+    root: /site1
 
 notifiers:
   ops-telegram:

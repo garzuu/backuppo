@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use super::Config;
+use super::{Config, DestinationConfig};
 
 /// Errore di parsing o validazione della configurazione. Ogni variante porta
 /// il nome del campo/job coinvolto per produrre messaggi leggibili.
@@ -27,6 +27,9 @@ pub enum ConfigError {
         expr: String,
         message: String,
     },
+
+    #[error("destination '{name}': serve almeno uno tra 'password_env' e 'key_path' per l'autenticazione SFTP")]
+    SftpMissingAuth { name: String },
 }
 
 /// Valida i riferimenti incrociati (destination/notifier) e la sintassi cron
@@ -34,6 +37,19 @@ pub enum ConfigError {
 /// [`Config::from_yaml`] tramite serde.
 pub fn validate(config: &Config) -> Result<(), Vec<ConfigError>> {
     let mut errors = Vec::new();
+
+    for (name, destination) in &config.destinations {
+        if let DestinationConfig::Sftp {
+            password_env,
+            key_path,
+            ..
+        } = destination
+        {
+            if password_env.is_none() && key_path.is_none() {
+                errors.push(ConfigError::SftpMissingAuth { name: name.clone() });
+            }
+        }
+    }
 
     for (job_name, job) in &config.jobs {
         if !config.destinations.contains_key(&job.destination) {

@@ -1,6 +1,6 @@
-# ROADMAP — Backup tool open source (stile Iperius) in Rust
+# ROADMAP — Backuppo: backup open source (stile Iperius) in Rust
 
-Nome provvisorio: `backupper`
+Nome progetto: **Backuppo** · crate: `backuppo` · binario (comando): `bkpo`
 
 ## Come usare questo file con Claude Code
 
@@ -27,8 +27,9 @@ Ordine di sviluppo: prima l'agent fino a `v0.1.0` stabile, poi l'hub, poi l'app.
 ## Decisioni prese
 
 - Linguaggio: **Rust** (edition 2021), workspace con più crate.
+- **Nome**: progetto e repo `backuppo` (gioco di parole backup + hippo, mascotte: ippopotamo). Il crate CLI si chiama `backuppo` e definisce il binario `bkpo` con `[[bin]] name = "bkpo"` in `Cargo.toml`. Prima di pubblicare, verificare la disponibilità del crate `backuppo` su crates.io.
 - Motore MVP: **proprio** (tar + zstd + cifratura `age`), non restic. Un motore incrementale/dedup verrà aggiunto dopo come secondo `Engine`.
-- Storage: **opendal** (fs, sftp, s3, webdav) dietro il trait `Destination`.
+- Storage: **opendal** (fs, s3, webdav) dietro il trait `Destination`. **SFTP fa eccezione**: il backend sftp di opendal fa da wrapper al binario di sistema `ssh` e supporta solo autenticazione a chiave, quindi per supportare anche la password si usa un client nativo in Rust (`russh` + `russh-sftp`), restando comunque un binario statico. Deciso in Fase 6, confermato dall'utente.
 - TLS: solo **rustls** (mai OpenSSL, per facilitare il build statico musl).
 - Config: **YAML** con `serde_yaml`. I segreti non stanno nel file: si referenziano via `*_env`.
 - Async: `tokio`. Errori: `thiserror` nelle librerie, `anyhow` solo nel crate `cli`.
@@ -43,7 +44,7 @@ Ordine di sviluppo: prima l'agent fino a `v0.1.0` stabile, poi l'hub, poi l'app.
 ## Struttura del workspace
 
 ```
-backupper/
+backuppo/
 ├── Cargo.toml              # workspace
 ├── ROADMAP.md
 ├── crates/
@@ -87,57 +88,57 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 - [x] Risoluzione segreti da variabili d'ambiente (`password_env`, `token_env`)
 - [x] Test unitari su config valide e non valide
 
-**Fatto quando:** `backupper check --config config.yaml` valida il file e stampa errori leggibili.
+**Fatto quando:** `bkpo check --config config.yaml` valida il file e stampa errori leggibili.
 
 ## Fase 2 — Primo giro end to end (cartella → locale)
 
-- [x] `Source` cartella (staging, conteggio file/byte, esclusioni glob)
-- [x] Engine: tar + zstd + cifratura `age` (chiave/passphrase da env)
-- [x] `Destination` locale (opendal fs)
-- [x] Comando `backupper run --config c.yaml --job <nome>`
-- [x] Logging strutturato con `tracing`
-- [x] Il core non stampa risultati "a mano": ogni esito passa da `JobEvent`
-- [x] Test di integrazione: backup di una cartella temporanea e confronto contenuto
+- [ ] `Source` cartella (staging, conteggio file/byte, esclusioni glob)
+- [ ] Engine: tar + zstd + cifratura `age` (chiave/passphrase da env)
+- [ ] `Destination` locale (opendal fs)
+- [ ] Comando `bkpo run --config c.yaml --job <nome>`
+- [ ] Logging strutturato con `tracing`
+- [ ] Il core non stampa risultati "a mano": ogni esito passa da `JobEvent`
+- [ ] Test di integrazione: backup di una cartella temporanea e confronto contenuto
 
 **Fatto quando:** un job cartella → directory locale produce un archivio cifrato e il test lo ripristina identico.
 
 ## Fase 3 — Verifica restore (il differenziatore)
 
-- [x] Comando `backupper verify --job <nome>`: scarica l'ultimo backup, decifra, decomprime in dir temporanea
-- [x] Controlli per cartelle: numero di file, dimensioni, checksum di un campione
-- [x] Config `verify_restore: never | every | daily | weekly` per job
-- [x] Evento `RestoreVerified` con dettaglio
-- [x] Allarme "backup troppo vecchio" (soglia configurabile)
+- [ ] Comando `bkpo verify --job <nome>`: scarica l'ultimo backup, decifra, decomprime in dir temporanea
+- [ ] Controlli per cartelle: numero di file, dimensioni, checksum di un campione
+- [ ] Config `verify_restore: never | every | daily | weekly` per job
+- [ ] Evento `RestoreVerified` con dettaglio
+- [ ] Allarme "backup troppo vecchio" (soglia configurabile)
 
 **Fatto quando:** un backup corrotto di proposito (byte alterato) fa fallire la verifica con messaggio chiaro.
 
 ## Fase 4 — Notifiche
 
-- [x] Notifier Telegram (reqwest + rustls, chiamata `sendMessage`)
-- [x] Notifier SMTP (`lettre`, STARTTLS e TLS implicito)
-- [x] Regole per job: `on_success`, `on_failure`, `on_verify`
-- [x] Comando `backupper notify-test` per provare i canali
-- [x] Test con mock server per Telegram e SMTP locale
+- [ ] Notifier Telegram (reqwest + rustls, chiamata `sendMessage`)
+- [ ] Notifier SMTP (`lettre`, STARTTLS e TLS implicito)
+- [ ] Regole per job: `on_success`, `on_failure`, `on_verify`
+- [ ] Comando `bkpo notify-test` per provare i canali
+- [ ] Test con mock server per Telegram e SMTP locale
 
 **Fatto quando:** un job fallito manda mail e Telegram, un job riuscito solo Telegram, come da config.
 
 ## Fase 5 — Scheduler e retention
 
-- [x] Modalità daemon: `backupper daemon` con scheduler cron-like (`tokio-cron-scheduler`)
-- [x] Un job non parte se il precedente è ancora in esecuzione (lock)
-- [x] Retention `daily/weekly/monthly` con cancellazione dei backup scaduti
-- [x] Retention **mai** distruttiva se l'ultimo backup è fallito o non verificato
-- [x] Shutdown pulito su SIGTERM/Ctrl+C
+- [ ] Modalità daemon: `bkpo daemon` con scheduler cron-like (`tokio-cron-scheduler`)
+- [ ] Un job non parte se il precedente è ancora in esecuzione (lock)
+- [ ] Retention `daily/weekly/monthly` con cancellazione dei backup scaduti
+- [ ] Retention **mai** distruttiva se l'ultimo backup è fallito o non verificato
+- [ ] Shutdown pulito su SIGTERM/Ctrl+C
 
 **Fatto quando:** il daemon esegue due job schedulati e applica la retention senza cancellare l'unico backup valido.
 
 ## Fase 6 — Destinazioni remote
 
-- [ ] SFTP (Hetzner Storage Box come caso di test reale)
-- [ ] S3-compatibili (B2, Wasabi, MinIO) con test su MinIO in Docker
-- [ ] WebDAV
-- [ ] Retry con backoff e upload resumable dove possibile
-- [ ] Limite di banda opzionale
+- [x] SFTP (Hetzner Storage Box come caso di test reale)
+- [x] S3-compatibili (B2, Wasabi, MinIO) con test su MinIO in Docker
+- [x] WebDAV
+- [x] Retry con backoff e upload resumable dove possibile
+- [x] Limite di banda opzionale
 
 **Fatto quando:** lo stesso job funziona verso locale, SFTP e S3 cambiando solo la destination.
 
@@ -158,7 +159,7 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 - [ ] Webhook generico (copre Slack, Discord, ntfy)
 - [ ] Pagina di stato HTML statica generata a ogni run
 - [ ] **Storico esecuzioni strutturato** (SQLite locale o JSON): job, esito, durata, byte, errore, esito verifica restore. Serve poi come base per hub e app
-- [ ] Log per esecuzione consultabile da CLI (`backupper runs`, `backupper logs <id>`)
+- [ ] Log per esecuzione consultabile da CLI (`bkpo runs`, `bkpo logs <id>`)
 
 **Fatto quando:** arriva il report settimanale con lo stato reale di ogni job e lo storico è interrogabile da CLI.
 
@@ -236,3 +237,4 @@ Prerequisito: API hub `/v1` stabile.
 - Complessità di async e trait object: preferisci soluzioni semplici (`Box<dyn Trait>` con `async_trait`).
 - Cross-compile Windows/macOS: verifica in CI fin dalle prime fasi, non alla fine.
 - Rompere la compatibilità tra agent e hub: versiona l'API (`/v1`) e non cambiare campi esistenti.
+- `Cargo.lock` fissa `kem` a `0.3.0-pre.0` (precise pin) per un conflitto reale tra le versioni di `ml-kem` usate da `age` e da `russh`: non lanciare `cargo update` senza `-p` su questa dipendenza, o il build torna a rompersi.
