@@ -65,11 +65,11 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 1 — Core e config
 
-- [ ] Trait e tipi in `core` (vedi sopra) + `BackupError`
-- [ ] Parser config con `serde`: `notifiers`, `destinations`, `jobs`
-- [ ] Validazione: riferimenti a destination/notifier inesistenti, campi mancanti, cron non valido → errori chiari con nome del campo
-- [ ] Risoluzione segreti da variabili d'ambiente (`password_env`, `token_env`)
-- [ ] Test unitari su config valide e non valide
+- [x] Trait e tipi in `core` (vedi sopra) + `BackupError`
+- [x] Parser config con `serde`: `notifiers`, `destinations`, `jobs`
+- [x] Validazione: riferimenti a destination/notifier inesistenti, campi mancanti, cron non valido → errori chiari con nome del campo
+- [x] Risoluzione segreti da variabili d'ambiente (`password_env`, `token_env`)
+- [x] Test unitari su config valide e non valide
 
 **Fatto quando:** `backupper check --config config.yaml` valida il file e stampa errori leggibili.
 
