@@ -2,6 +2,7 @@
 
 pub mod archive;
 mod manifest;
+mod notify;
 mod runner;
 mod verify;
 

@@ -8,17 +8,41 @@ use backupper_core::traits::Destination;
 use tracing::{info, instrument, warn};
 
 use crate::manifest::{self, Manifest, ManifestEntry};
-use crate::{archive, runner};
+use crate::{archive, notify, runner};
 
 /// Numero massimo di file di cui viene ricalcolato lo sha256 durante la
 /// verifica (per archivi con molti file, evita di rileggerli tutti).
 const SAMPLE_SIZE: usize = 5;
 
+/// Verifica l'ultimo backup del job e invia le notifiche configurate:
+/// `on_verify` se la verifica va a buon fine, `on_failure` altrimenti.
+pub async fn verify_job(job_name: &str, config: &Config) -> Result<JobEvent, BackupError> {
+    let result = verify_job_impl(job_name, config).await;
+
+    if let Some(job) = config.jobs.get(job_name) {
+        match &result {
+            Ok(event) => notify::dispatch(config, &job.notify.on_verify, event).await,
+            Err(e) => {
+                let event = JobEvent::Failure {
+                    job: job_name.to_string(),
+                    error: e.to_string(),
+                };
+                notify::dispatch(config, &job.notify.on_failure, &event).await;
+            }
+        }
+    }
+
+    result
+}
+
 /// Scarica l'ultimo backup del job, lo decifra/decomprime in una cartella
 /// temporanea e ne verifica l'integrità (numero di file, dimensioni,
 /// checksum su un campione) confrontando col manifest incluso nell'archivio.
 #[instrument(skip(job_name, config), fields(job = job_name))]
-pub async fn verify_job(job_name: &str, config: &Config) -> Result<JobEvent, BackupError> {
+pub(crate) async fn verify_job_impl(
+    job_name: &str,
+    config: &Config,
+) -> Result<JobEvent, BackupError> {
     let job = config
         .jobs
         .get(job_name)

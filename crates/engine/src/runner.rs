@@ -2,17 +2,45 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use backupper_core::config::{Compression, Config, EncryptionConfig, VerifyRestore};
 use backupper_core::error::BackupError;
-use backupper_core::model::Artifact;
+use backupper_core::model::{Artifact, JobEvent};
 use backupper_core::secrets::resolve_env;
 use tracing::{info, instrument};
 
-use crate::{archive, manifest, verify};
+use crate::{archive, manifest, notify, verify};
 
-/// Esegue il job `job_name` definito in `config`: prepara la sorgente,
-/// costruisce l'archivio (tar [+ zstd] [+ age]) e lo carica sulla
-/// destination configurata. Ritorna l'`Artifact` finale caricato.
+/// Esegue il job `job_name` e invia le notifiche configurate: `on_success`
+/// se il backup (ed eventuale verifica) va a buon fine, `on_failure`
+/// altrimenti.
 #[instrument(skip(job_name, config), fields(job = job_name))]
 pub async fn run_job(job_name: &str, config: &Config) -> Result<Artifact, BackupError> {
+    let result = run_job_impl(job_name, config).await;
+
+    if let Some(job) = config.jobs.get(job_name) {
+        let (event, names) = match &result {
+            Ok(artifact) => (
+                JobEvent::Success {
+                    job: job_name.to_string(),
+                    artifact: artifact.clone(),
+                },
+                &job.notify.on_success,
+            ),
+            Err(e) => (
+                JobEvent::Failure {
+                    job: job_name.to_string(),
+                    error: e.to_string(),
+                },
+                &job.notify.on_failure,
+            ),
+        };
+        notify::dispatch(config, names, &event).await;
+    }
+
+    result
+}
+
+/// Prepara la sorgente, costruisce l'archivio (tar [+ zstd] [+ age]) e lo
+/// carica sulla destination configurata. Ritorna l'`Artifact` finale caricato.
+async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, BackupError> {
     let job = config
         .jobs
         .get(job_name)
@@ -96,7 +124,11 @@ pub async fn run_job(job_name: &str, config: &Config) -> Result<Artifact, Backup
     // verifica fa parte del criterio di successo del job.
     if job.verify_restore == Some(VerifyRestore::Every) {
         info!("verify_restore=every: avvio verifica restore");
-        verify::verify_job(job_name, config).await?;
+        let verify_result = verify::verify_job_impl(job_name, config).await;
+        if let Ok(event) = &verify_result {
+            notify::dispatch(config, &job.notify.on_verify, event).await;
+        }
+        verify_result?;
     }
 
     info!("job completato con successo");

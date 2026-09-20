@@ -113,11 +113,11 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 4 — Notifiche
 
-- [ ] Notifier Telegram (reqwest + rustls, chiamata `sendMessage`)
-- [ ] Notifier SMTP (`lettre`, STARTTLS e TLS implicito)
-- [ ] Regole per job: `on_success`, `on_failure`, `on_verify`
-- [ ] Comando `backupper notify-test` per provare i canali
-- [ ] Test con mock server per Telegram e SMTP locale
+- [x] Notifier Telegram (reqwest + rustls, chiamata `sendMessage`)
+- [x] Notifier SMTP (`lettre`, STARTTLS e TLS implicito)
+- [x] Regole per job: `on_success`, `on_failure`, `on_verify`
+- [x] Comando `backupper notify-test` per provare i canali
+- [x] Test con mock server per Telegram e SMTP locale
 
 **Fatto quando:** un job fallito manda mail e Telegram, un job riuscito solo Telegram, come da config.
 

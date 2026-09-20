@@ -37,6 +37,14 @@ enum Command {
         #[arg(long)]
         job: String,
     },
+    /// Invia un messaggio di prova a uno o tutti i notifier configurati.
+    NotifyTest {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        /// Nome del notifier da provare; se omesso li prova tutti.
+        #[arg(long)]
+        notifier: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -50,6 +58,7 @@ async fn main() -> Result<()> {
         Command::Check { config } => check(&config),
         Command::Run { config, job } => run(&config, &job).await,
         Command::Verify { config, job } => verify(&config, &job).await,
+        Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
     }
 }
 
@@ -135,4 +144,50 @@ async fn verify(config_path: &PathBuf, job_name: &str) -> Result<()> {
             bail!("verifica fallita");
         }
     }
+}
+
+async fn notify_test(config_path: &PathBuf, notifier_name: Option<&str>) -> Result<()> {
+    let config = load_config(config_path)?;
+
+    let names: Vec<String> = match notifier_name {
+        Some(name) => vec![name.to_string()],
+        None => config.notifiers.keys().cloned().collect(),
+    };
+
+    if names.is_empty() {
+        println!("nessun notifier configurato.");
+        return Ok(());
+    }
+
+    let event = JobEvent::Report {
+        summary: "backupper: messaggio di prova (notify-test)".to_string(),
+    };
+
+    let mut any_failed = false;
+    for name in &names {
+        let Some(notifier_config) = config.notifiers.get(name) else {
+            eprintln!("notifier '{name}': non trovato in config");
+            any_failed = true;
+            continue;
+        };
+
+        match backupper_notifiers::build(notifier_config) {
+            Ok(notifier) => match notifier.send(&event).await {
+                Ok(()) => println!("notifier '{name}': OK"),
+                Err(e) => {
+                    eprintln!("notifier '{name}': invio fallito: {e}");
+                    any_failed = true;
+                }
+            },
+            Err(e) => {
+                eprintln!("notifier '{name}': impossibile costruirlo: {e}");
+                any_failed = true;
+            }
+        }
+    }
+
+    if any_failed {
+        bail!("uno o più notifier hanno fallito il test");
+    }
+    Ok(())
 }
