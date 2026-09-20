@@ -28,6 +28,19 @@ pub enum ConfigError {
         message: String,
     },
 
+    #[error("report #{index}: campo 'schedule' non valido ('{expr}'): {message}")]
+    InvalidReportCron {
+        index: usize,
+        expr: String,
+        message: String,
+    },
+
+    #[error("report #{index}: notifier '{name}' non definito in 'notifiers'")]
+    UnknownReportNotifier { index: usize, name: String },
+
+    #[error("la sezione 'reports' richiede la sezione 'observability'")]
+    ReportsWithoutObservability,
+
     #[error("destination '{name}': serve almeno uno tra 'password_env' e 'key_path' per l'autenticazione SFTP")]
     SftpMissingAuth { name: String },
 }
@@ -82,6 +95,28 @@ pub fn validate(config: &Config) -> Result<(), Vec<ConfigError>> {
                 expr: job.schedule.clone(),
                 message,
             });
+        }
+    }
+
+    if !config.reports.is_empty() && config.observability.is_none() {
+        errors.push(ConfigError::ReportsWithoutObservability);
+    }
+    for (index, report) in config.reports.iter().enumerate() {
+        let display_index = index + 1;
+        if let Err(message) = validate_cron(&report.schedule) {
+            errors.push(ConfigError::InvalidReportCron {
+                index: display_index,
+                expr: report.schedule.clone(),
+                message,
+            });
+        }
+        for name in &report.notifiers {
+            if !config.notifiers.contains_key(name) {
+                errors.push(ConfigError::UnknownReportNotifier {
+                    index: display_index,
+                    name: name.clone(),
+                });
+            }
         }
     }
 
@@ -194,5 +229,23 @@ jobs:
 "#;
         let err = Config::from_yaml(yaml).expect_err("deve fallire il parsing");
         assert!(matches!(err, ConfigError::Parse(_)));
+    }
+
+    #[test]
+    fn validates_report_schedule_notifiers_and_observability() {
+        let yaml = format!(
+            "{}\nobservability:\n  history_path: /tmp/history.sqlite\nreports:\n  - schedule: \"0 8 * * 1\"\n    days: 7\n    notifiers: [ops-telegram]\n",
+            valid_config_yaml()
+        );
+        let config = Config::from_yaml(&yaml).expect("parsing valido");
+        validate(&config).expect("report valido");
+
+        let invalid = yaml.replace("ops-telegram]", "missing]");
+        let config = Config::from_yaml(&invalid).expect("parsing valido");
+        let errors = validate(&config).expect_err("notifier report sconosciuto");
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ConfigError::UnknownReportNotifier { name, .. } if name == "missing"
+        )));
     }
 }

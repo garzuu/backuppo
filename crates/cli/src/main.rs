@@ -53,6 +53,19 @@ enum Command {
         #[arg(long, value_name = "FILE")]
         config: PathBuf,
     },
+    /// Elenca le esecuzioni registrate nello storico locale.
+    Runs {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+    /// Mostra il log associato a una singola esecuzione.
+    Logs {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        id: i64,
+    },
 }
 
 #[tokio::main]
@@ -68,7 +81,66 @@ async fn main() -> Result<()> {
         Command::Verify { config, job } => verify(&config, &job).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
         Command::Daemon { config } => daemon::run(load_config(&config)?).await,
+        Command::Runs { config, limit } => runs(&config, limit),
+        Command::Logs { config, id } => logs(&config, id),
     }
+}
+
+fn history_store(config: &Config) -> Result<backuppo_engine::history::HistoryStore> {
+    let settings = config
+        .observability
+        .as_ref()
+        .context("la configurazione non contiene la sezione 'observability'")?;
+    backuppo_engine::history::HistoryStore::open(&settings.history_path)
+        .map_err(anyhow::Error::from)
+}
+
+fn runs(config_path: &PathBuf, limit: usize) -> Result<()> {
+    let config = load_config(config_path)?;
+    let records = history_store(&config)?.list(limit)?;
+    if records.is_empty() {
+        println!("nessuna esecuzione registrata.");
+        return Ok(());
+    }
+    println!("ID\tINIZIO\tJOB\tTIPO\tSTATO\tDURATA\tBYTE\tVERIFICA");
+    for record in records {
+        let started = format_timestamp(record.started_at);
+        let duration = record
+            .duration_ms
+            .map(|value| format!("{value}ms"))
+            .unwrap_or_else(|| "-".to_string());
+        let bytes = record
+            .bytes
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        println!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            record.id,
+            started,
+            record.job,
+            record.kind,
+            record.status,
+            duration,
+            bytes,
+            record.verification_status
+        );
+    }
+    Ok(())
+}
+
+fn logs(config_path: &PathBuf, id: i64) -> Result<()> {
+    let config = load_config(config_path)?;
+    let record = history_store(&config)?
+        .get(id)?
+        .with_context(|| format!("esecuzione #{id} non trovata"))?;
+    print!("{}", record.log);
+    Ok(())
+}
+
+fn format_timestamp(timestamp: i64) -> String {
+    chrono::DateTime::from_timestamp(timestamp, 0)
+        .map(|value| value.to_rfc3339())
+        .unwrap_or_else(|| timestamp.to_string())
 }
 
 fn load_config(path: &PathBuf) -> Result<Config> {

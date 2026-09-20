@@ -42,6 +42,8 @@ fn build_config(dst: &std::path::Path, retention: Retention) -> Config {
         destinations,
         notifiers: HashMap::new(),
         jobs,
+        observability: None,
+        reports: Vec::new(),
     }
 }
 

@@ -1,11 +1,15 @@
 //! Crate `engine`: esecuzione job, retention, verifica restore.
 
 pub mod archive;
+pub mod history;
 mod manifest;
 mod naming;
 mod notify;
+mod observability;
+pub mod report;
 pub mod retention;
 mod runner;
+pub mod status;
 mod verify;
 
 use backuppo_core::config::Config;

@@ -155,11 +155,11 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 8 — Report e osservabilità (locale)
 
-- [ ] Report periodico via mail (es. "7 job ok, 1 fallito, ultimo restore test: ieri")
-- [ ] Webhook generico (copre Slack, Discord, ntfy)
-- [ ] Pagina di stato HTML statica generata a ogni run
-- [ ] **Storico esecuzioni strutturato** (SQLite locale o JSON): job, esito, durata, byte, errore, esito verifica restore. Serve poi come base per hub e app
-- [ ] Log per esecuzione consultabile da CLI (`bkpo runs`, `bkpo logs <id>`)
+- [x] Report periodico via mail (es. "7 job ok, 1 fallito, ultimo restore test: ieri")
+- [x] Webhook generico (copre Slack, Discord, ntfy)
+- [x] Pagina di stato HTML statica generata a ogni run
+- [x] **Storico esecuzioni strutturato** (SQLite locale o JSON): job, esito, durata, byte, errore, esito verifica restore. Serve poi come base per hub e app
+- [x] Log per esecuzione consultabile da CLI (`bkpo runs`, `bkpo logs <id>`)
 
 **Fatto quando:** arriva il report settimanale con lo stato reale di ogni job e lo storico è interrogabile da CLI.
 

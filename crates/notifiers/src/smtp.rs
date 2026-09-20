@@ -206,4 +206,26 @@ mod tests {
         assert!(body.contains("Subject: [backuppo] backup FALLITO: documents"));
         assert!(body.contains("job 'documents': backup fallito: disco pieno"));
     }
+
+    #[tokio::test]
+    async fn sends_periodic_report_with_report_subject() {
+        let (port, body_rx) = spawn_fake_smtp_server().await;
+        let notifier = SmtpNotifier::dangerous(
+            "127.0.0.1",
+            port,
+            "backups@example.com",
+            &["ops@example.com".to_string()],
+        )
+        .unwrap();
+        notifier
+            .send(&JobEvent::Report {
+                summary: "Backup: 7 riusciti, 1 fallito".to_string(),
+            })
+            .await
+            .expect("invio report");
+
+        let body = body_rx.await.expect("DATA ricevuto");
+        assert!(body.contains("Subject: [backuppo] report"));
+        assert!(body.contains("Backup: 7 riusciti, 1 fallito"));
+    }
 }

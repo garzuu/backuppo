@@ -81,6 +81,8 @@ fn build_config(
         destinations,
         notifiers: HashMap::new(),
         jobs,
+        observability: None,
+        reports: Vec::new(),
     }
 }
 
@@ -160,6 +162,8 @@ async fn assert_retention_prunes_old_backups(
         destinations,
         notifiers: HashMap::new(),
         jobs,
+        observability: None,
+        reports: Vec::new(),
     };
 
     let summary = backuppo_engine::retention::apply(job_name, &config)

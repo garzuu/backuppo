@@ -51,11 +51,38 @@ pub async fn run(config: Config) -> Result<()> {
             .with_context(|| format!("impossibile registrare il job '{name}' nello scheduler"))?;
     }
 
+    for (index, report) in config.reports.iter().enumerate() {
+        let cron_expr = format!("0 {}", report.schedule);
+        let days = report.days;
+        let notifiers = report.notifiers.clone();
+        let config = Arc::clone(&config);
+        let report_number = index + 1;
+        let scheduled = Job::new_async(cron_expr.as_str(), move |_uuid, _scheduler| {
+            let config = Arc::clone(&config);
+            let notifiers = notifiers.clone();
+            Box::pin(async move {
+                if let Err(error) = backuppo_engine::report::send(&config, days, &notifiers).await {
+                    warn!(report = report_number, %error, "generazione report fallita");
+                }
+            })
+        })
+        .with_context(|| {
+            format!("schedule non valido per il report #{report_number}: '{cron_expr}'")
+        })?;
+        scheduler.add(scheduled).await.with_context(|| {
+            format!("impossibile registrare il report #{report_number} nello scheduler")
+        })?;
+    }
+
     scheduler
         .start()
         .await
         .context("impossibile avviare lo scheduler")?;
-    info!(jobs = config.jobs.len(), "daemon avviato");
+    info!(
+        jobs = config.jobs.len(),
+        reports = config.reports.len(),
+        "daemon avviato"
+    );
 
     wait_for_shutdown_signal().await;
     info!("segnale di arresto ricevuto, shutdown in corso");
@@ -162,6 +189,8 @@ mod tests {
             destinations,
             notifiers: HashMap::new(),
             jobs,
+            observability: None,
+            reports: Vec::new(),
         }
     }
 

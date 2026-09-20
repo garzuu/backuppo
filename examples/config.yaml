@@ -50,6 +50,21 @@ notifiers:
     to:
       - ops@example.com
 
+  ops-webhook:
+    type: webhook
+    url: https://hooks.example.com/backuppo
+
+observability:
+  history_path: /var/lib/backuppo/history.sqlite
+  status_page: /var/lib/backuppo/status.html
+
+reports:
+  # Report settimanale ogni lunedì alle 08:00 sugli ultimi sette giorni.
+  - schedule: "0 8 * * 1"
+    days: 7
+    notifiers:
+      - ops-email
+
 jobs:
   home-documents:
     source:

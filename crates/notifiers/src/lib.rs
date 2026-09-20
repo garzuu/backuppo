@@ -2,9 +2,11 @@
 
 mod smtp;
 mod telegram;
+mod webhook;
 
 pub use smtp::SmtpNotifier;
 pub use telegram::TelegramNotifier;
+pub use webhook::WebhookNotifier;
 
 use backuppo_core::config::NotifierConfig;
 use backuppo_core::error::BackupError;
@@ -31,8 +33,6 @@ pub fn build(config: &NotifierConfig) -> Result<Box<dyn Notifier>, BackupError> 
             from,
             to,
         )?)),
-        NotifierConfig::Webhook { .. } => Err(BackupError::Other(
-            "notifier 'webhook' non ancora implementato (previsto in Fase 8)".to_string(),
-        )),
+        NotifierConfig::Webhook { url } => Ok(Box::new(WebhookNotifier::new(url)?)),
     }
 }

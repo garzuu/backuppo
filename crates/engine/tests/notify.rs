@@ -97,6 +97,8 @@ fn build_config(
         destinations,
         notifiers,
         jobs,
+        observability: None,
+        reports: Vec::new(),
     }
 }
 

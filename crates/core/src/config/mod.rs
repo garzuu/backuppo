@@ -15,6 +15,37 @@ pub struct Config {
     pub notifiers: HashMap<String, NotifierConfig>,
     #[serde(default)]
     pub jobs: HashMap<String, JobConfig>,
+    /// Persistenza locale dello storico e pagina di stato. Se assente,
+    /// l'osservabilità su disco è disabilitata.
+    #[serde(default)]
+    pub observability: Option<ObservabilityConfig>,
+    /// Report periodici generati dallo storico locale e inviati ai notifier.
+    #[serde(default)]
+    pub reports: Vec<ReportConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ObservabilityConfig {
+    /// Database SQLite locale delle esecuzioni.
+    pub history_path: String,
+    /// File HTML statico rigenerato dopo ogni backup o verifica.
+    #[serde(default)]
+    pub status_page: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReportConfig {
+    /// Schedule cron standard a cinque campi.
+    pub schedule: String,
+    /// Finestra temporale inclusa nel report.
+    #[serde(default = "default_report_days")]
+    pub days: u32,
+    /// Notifier ai quali inviare il report.
+    pub notifiers: Vec<String>,
+}
+
+fn default_report_days() -> u32 {
+    7
 }
 
 impl Config {

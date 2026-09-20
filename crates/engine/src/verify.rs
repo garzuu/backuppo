@@ -9,6 +9,7 @@ use tracing::{info, instrument, warn};
 
 use crate::manifest::{self, Manifest, ManifestEntry};
 use crate::naming::extract_timestamp;
+use crate::observability::ExecutionObserver;
 use crate::{archive, notify, runner};
 
 /// Numero massimo di file di cui viene ricalcolato lo sha256 durante la
@@ -18,7 +19,10 @@ const SAMPLE_SIZE: usize = 5;
 /// Verifica l'ultimo backup del job e invia le notifiche configurate:
 /// `on_verify` se la verifica va a buon fine, `on_failure` altrimenti.
 pub async fn verify_job(job_name: &str, config: &Config) -> Result<JobEvent, BackupError> {
+    let mut observer = ExecutionObserver::start(config, job_name, "verify");
+    observer.verification_started();
     let result = verify_job_impl(job_name, config).await;
+    observer.finish_verify(config, &result);
 
     if let Some(job) = config.jobs.get(job_name) {
         match &result {

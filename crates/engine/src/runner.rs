@@ -7,6 +7,7 @@ use backuppo_core::secrets::resolve_env;
 use tokio::process::Command;
 use tracing::{info, instrument, warn};
 
+use crate::observability::ExecutionObserver;
 use crate::{archive, manifest, notify, verify};
 
 /// Esegue il job `job_name` e invia le notifiche configurate: `on_success`
@@ -14,7 +15,9 @@ use crate::{archive, manifest, notify, verify};
 /// altrimenti.
 #[instrument(skip(job_name, config), fields(job = job_name))]
 pub async fn run_job(job_name: &str, config: &Config) -> Result<Artifact, BackupError> {
-    let result = run_job_impl(job_name, config).await;
+    let mut observer = ExecutionObserver::start(config, job_name, "backup");
+    let result = run_job_impl(job_name, config, &mut observer).await;
+    observer.finish_backup(config, &result);
 
     if let Some(job) = config.jobs.get(job_name) {
         let (event, names) = match &result {
@@ -41,7 +44,11 @@ pub async fn run_job(job_name: &str, config: &Config) -> Result<Artifact, Backup
 
 /// Prepara la sorgente, costruisce l'archivio (tar [+ zstd] [+ age]) e lo
 /// carica sulla destination configurata. Ritorna l'`Artifact` finale caricato.
-async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, BackupError> {
+async fn run_job_impl(
+    job_name: &str,
+    config: &Config,
+    observer: &mut ExecutionObserver,
+) -> Result<Artifact, BackupError> {
     let job = config
         .jobs
         .get(job_name)
@@ -58,12 +65,17 @@ async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, Backu
     let destination = backuppo_destinations::build(dest_config)?;
 
     run_hooks("pre", &job.pre).await?;
+    observer.log("hook pre completati");
 
     let staging_root = tempfile::tempdir()?;
     let staging_data = staging_root.path().join("data");
 
     info!("avvio preparazione sorgente");
     let raw = source.prepare(&staging_data).await?;
+    observer.log(&format!(
+        "sorgente preparata: {} file, {} byte",
+        raw.files, raw.bytes
+    ));
     info!(files = raw.files, bytes = raw.bytes, "sorgente preparata");
 
     let manifest_dir = raw.path.clone();
@@ -112,6 +124,10 @@ async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, Backu
         files: raw.files,
         checksum,
     };
+    observer.log(&format!(
+        "archivio creato: {} byte, checksum {}",
+        final_artifact.bytes, final_artifact.checksum
+    ));
 
     info!(
         bytes = final_artifact.bytes,
@@ -119,6 +135,7 @@ async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, Backu
         "archivio pronto, avvio upload"
     );
     destination.upload(&final_artifact).await?;
+    observer.log("upload confermato dalla destination");
     source.cleanup(&raw).await?;
     info!("upload completato");
 
@@ -127,15 +144,20 @@ async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, Backu
     // verifica fa parte del criterio di successo del job.
     if job.verify_restore == Some(VerifyRestore::Every) {
         info!("verify_restore=every: avvio verifica restore");
+        observer.verification_started();
         let verify_result = verify::verify_job_impl(job_name, config).await;
         if let Ok(event) = &verify_result {
             notify::dispatch(config, &job.notify.on_verify, event).await;
         }
         verify_result?;
+        observer.verification_succeeded();
     }
 
     if let Err(error) = run_hooks("post", &job.post).await {
         warn!(%error, "hook post fallito dopo il completamento del backup");
+        observer.log("hook post fallito; backup già completato");
+    } else {
+        observer.log("hook post completati");
     }
 
     info!("job completato con successo");
