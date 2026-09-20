@@ -1,0 +1,16 @@
+[package]
+name = "backupper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "backupper"
+path = "src/main.rs"
+
+[dependencies]
+backupper-core.workspace = true
+backupper-engine.workspace = true
+backupper-sources.workspace = true
+backupper-destinations.workspace = true
+backupper-notifiers.workspace = true

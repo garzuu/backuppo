@@ -1,0 +1,60 @@
+# Schema target per la configurazione di backupper.
+# I segreti non vanno mai scritti qui in chiaro: si referenziano tramite
+# variabili d'ambiente con i campi *_env.
+
+destinations:
+  local-nas:
+    type: fs
+    root: /mnt/backups
+
+  hetzner-sftp:
+    type: sftp
+    host: u123456.your-storagebox.de
+    port: 23
+    user: u123456
+    password_env: HETZNER_SFTP_PASSWORD
+    root: /backups
+
+notifiers:
+  ops-telegram:
+    type: telegram
+    token_env: TELEGRAM_BOT_TOKEN
+    chat_id: "123456789"
+
+  ops-email:
+    type: smtp
+    host: smtp.example.com
+    port: 587
+    user: backups@example.com
+    password_env: SMTP_PASSWORD
+    from: backups@example.com
+    to:
+      - ops@example.com
+
+jobs:
+  home-documents:
+    source:
+      type: folder
+      path: /home/user/Documents
+      exclude:
+        - "*.tmp"
+        - "node_modules/"
+    destination: local-nas
+    compression: zstd
+    encryption:
+      type: age
+      passphrase_env: BACKUP_PASSPHRASE
+    schedule: "0 3 * * *" # ogni giorno alle 03:00
+    verify_restore: daily
+    retention:
+      daily: 7
+      weekly: 4
+      monthly: 6
+    notify:
+      on_success:
+        - ops-telegram
+      on_failure:
+        - ops-telegram
+        - ops-email
+      on_verify:
+        - ops-telegram

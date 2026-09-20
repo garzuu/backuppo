@@ -1,0 +1,8 @@
+[package]
+name = "backupper-notifiers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+backupper-core.workspace = true

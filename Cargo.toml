@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/engine",
+    "crates/sources",
+    "crates/destinations",
+    "crates/notifiers",
+    "crates/cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/CHANGEME/backupper"
+
+[workspace.dependencies]
+backupper-core = { path = "crates/core" }
+backupper-engine = { path = "crates/engine" }
+backupper-sources = { path = "crates/sources" }
+backupper-destinations = { path = "crates/destinations" }
+backupper-notifiers = { path = "crates/notifiers" }
