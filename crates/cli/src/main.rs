@@ -1,4 +1,6 @@
 mod daemon;
+#[cfg(windows)]
+mod windows_service;
 
 use std::path::PathBuf;
 
@@ -66,6 +68,12 @@ enum Command {
         config: PathBuf,
         id: i64,
     },
+    /// Avvia Backuppo sotto Windows Service Control Manager.
+    #[cfg(windows)]
+    Service {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -83,6 +91,8 @@ async fn main() -> Result<()> {
         Command::Daemon { config } => daemon::run(load_config(&config)?).await,
         Command::Runs { config, limit } => runs(&config, limit),
         Command::Logs { config, id } => logs(&config, id),
+        #[cfg(windows)]
+        Command::Service { config } => windows_service::run(config),
     }
 }
 
@@ -143,7 +153,7 @@ fn format_timestamp(timestamp: i64) -> String {
         .unwrap_or_else(|| timestamp.to_string())
 }
 
-fn load_config(path: &PathBuf) -> Result<Config> {
+pub(crate) fn load_config(path: &PathBuf) -> Result<Config> {
     let yaml = std::fs::read_to_string(path).with_context(|| {
         format!(
             "impossibile leggere il file di configurazione '{}'",

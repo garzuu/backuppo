@@ -165,11 +165,11 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 9 — Release agent
 
-- [ ] Build statici Linux (musl), Windows e macOS via CI
-- [ ] Immagine Docker minimale
-- [ ] Servizio systemd d'esempio e installer Windows (servizio)
-- [ ] Documentazione: quickstart, riferimento config, guida al restore manuale
-- [ ] Release `v0.1.0` con changelog
+- [x] Build statici Linux (musl), Windows e macOS via CI
+- [x] Immagine Docker minimale
+- [x] Servizio systemd d'esempio e installer Windows (servizio)
+- [x] Documentazione: quickstart, riferimento config, guida al restore manuale
+- [ ] Release `v0.1.0` con changelog (pronta; manca la pubblicazione del tag)
 
 ## Fase 10 — Dopo l'MVP (da valutare)
 

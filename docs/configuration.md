@@ -1,0 +1,172 @@
+# Riferimento configurazione
+
+La configurazione è YAML. I nomi sotto `destinations`, `notifiers` e `jobs`
+sono identificatori scelti dall'utente. `bkpo check --config FILE` controlla
+campi obbligatori, riferimenti e schedule prima dell'esecuzione.
+
+## Destinazioni
+
+### Filesystem
+
+```yaml
+destinations:
+  local:
+    type: fs
+    root: /var/backups/backuppo
+```
+
+### SFTP
+
+```yaml
+  remote:
+    type: sftp
+    host: storage.example.com
+    port: 22
+    user: backup
+    password_env: SFTP_PASSWORD
+    key_path: /etc/backuppo/id_ed25519
+    key_passphrase_env: SFTP_KEY_PASSPHRASE
+    host_key_fingerprint: SHA256:...
+    root: /backups
+    retry: { max_times: 5 }
+    bandwidth_limit_kib_s: 5120
+```
+
+Serve almeno uno tra `password_env` e `key_path`. In produzione configura la
+fingerprint della host key.
+
+### S3 compatibile
+
+```yaml
+  object-storage:
+    type: s3
+    bucket: backups
+    region: eu-central-1
+    endpoint: https://s3.example.com
+    access_key_id_env: S3_ACCESS_KEY_ID
+    secret_access_key_env: S3_SECRET_ACCESS_KEY
+    root: site-a
+    virtual_host_style: false
+    retry: { max_times: 5 }
+    bandwidth_limit_kib_s: 5120
+```
+
+`endpoint` è opzionale per AWS. Il path style è il default ed è normalmente
+quello richiesto da MinIO e dagli storage self-hosted.
+
+### WebDAV
+
+```yaml
+  webdav:
+    type: webdav
+    url: https://dav.example.com/backups
+    user: backup
+    password_env: WEBDAV_PASSWORD
+    retry: { max_times: 5 }
+    bandwidth_limit_kib_s: 5120
+```
+
+## Sorgenti
+
+```yaml
+source:
+  type: folder
+  path: /srv/data
+  exclude: ["*.tmp", "cache/"]
+```
+
+Database PostgreSQL e MySQL/MariaDB usano rispettivamente `pg_dump` e
+`mysqldump`. Se `container` è presente, il comando viene eseguito dentro quel
+container; altrimenti il client deve essere installato sull'host.
+
+```yaml
+source:
+  type: postgres                 # oppure mysql
+  host: localhost
+  port: 5432                     # MySQL: 3306
+  user: postgres
+  password_env: DATABASE_PASSWORD
+  database: app
+  container: app-postgres        # opzionale
+```
+
+Le altre sorgenti sono:
+
+```yaml
+source: { type: sqlite, path: /srv/app.sqlite }
+source: { type: docker_volume, volume: app_data }
+source:
+  type: command
+  command: /usr/local/bin/export-data
+  args: ["--format", "json"]
+  output_filename: export.json
+```
+
+## Job
+
+```yaml
+jobs:
+  documents:
+    source: { type: folder, path: /srv/documents }
+    destination: local
+    compression: zstd            # zstd | none; default zstd
+    encryption:
+      type: age                  # age | none
+      passphrase_env: BACKUP_PASSPHRASE
+    schedule: "0 3 * * *"       # minuto ora giorno mese giorno-settimana
+    verify_restore: daily        # never | every | daily | weekly
+    max_backup_age_hours: 26
+    retention:
+      daily: 7
+      weekly: 4
+      monthly: 6
+    pre: [/usr/local/bin/before-backup]
+    post: [/usr/local/bin/after-backup]
+    notify:
+      on_success: [ops-webhook]
+      on_failure: [ops-email, ops-telegram]
+      on_verify: [ops-email]
+```
+
+Un hook `pre` fallito interrompe il job. Un hook `post` fallito viene
+registrato, ma non invalida un archivio già caricato e verificato.
+
+## Notifier
+
+```yaml
+notifiers:
+  ops-telegram:
+    type: telegram
+    token_env: TELEGRAM_BOT_TOKEN
+    chat_id: "123456"
+  ops-email:
+    type: smtp
+    host: smtp.example.com
+    port: 587
+    user: backups@example.com
+    password_env: SMTP_PASSWORD
+    from: backups@example.com
+    to: [ops@example.com]
+  ops-webhook:
+    type: webhook
+    url: https://hooks.example.com/backuppo
+```
+
+Il webhook invia JSON con `event`, `job`, `text`, `content` e `message`, più i
+metadati dell'archivio quando disponibili.
+
+## Storico, pagina di stato e report
+
+```yaml
+observability:
+  history_path: /var/lib/backuppo/history.sqlite
+  status_page: /var/lib/backuppo/status.html
+
+reports:
+  - schedule: "0 8 * * 1"
+    days: 7
+    notifiers: [ops-email]
+```
+
+Senza `observability` l'agent continua a funzionare, ma non scrive storico o
+pagina HTML. I report richiedono lo storico e vengono eseguiti dal daemon.

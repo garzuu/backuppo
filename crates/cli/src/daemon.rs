@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -11,6 +12,13 @@ use tracing::{info, warn};
 /// e resta in esecuzione finché non arriva un segnale di arresto
 /// (SIGTERM o Ctrl+C), poi effettua uno shutdown pulito.
 pub async fn run(config: Config) -> Result<()> {
+    run_until(config, wait_for_shutdown_signal()).await
+}
+
+pub(crate) async fn run_until<F>(config: Config, shutdown: F) -> Result<()>
+where
+    F: Future<Output = ()>,
+{
     let config = Arc::new(config);
     // Un lock per job: una nuova esecuzione schedulata viene saltata se la
     // precedente per lo stesso job non è ancora terminata.
@@ -84,7 +92,7 @@ pub async fn run(config: Config) -> Result<()> {
         "daemon avviato"
     );
 
-    wait_for_shutdown_signal().await;
+    shutdown.await;
     info!("segnale di arresto ricevuto, shutdown in corso");
 
     let mut scheduler = scheduler;

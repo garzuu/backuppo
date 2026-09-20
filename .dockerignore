@@ -1,0 +1,6 @@
+.git
+.github
+target
+.DS_Store
+*.sqlite
+*.db

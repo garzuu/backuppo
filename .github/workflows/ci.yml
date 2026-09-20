@@ -29,3 +29,42 @@ jobs:
 
       - name: cargo test
         run: cargo test --workspace
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build container image
+        run: docker build --tag backuppo:ci .
+      - name: Smoke test container
+        run: docker run --rm backuppo:ci --version
+
+  platform-builds:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - runner: macos-14
+            target: x86_64-apple-darwin
+          - runner: macos-14
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: platform-${{ matrix.target }}
+      - run: cargo build --locked --release --package backuppo --target ${{ matrix.target }}
+      - name: Verify static Linux binary
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: file target/${{ matrix.target }}/release/bkpo | grep -E 'statically linked|static-pie linked'
