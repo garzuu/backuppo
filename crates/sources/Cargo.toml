@@ -7,6 +7,12 @@ license.workspace = true
 [dependencies]
 async-trait = "0.1.92"
 backuppo-core.workspace = true
+bollard = "0.21.1"
+futures-util = "0.3.34"
 globset = "0.4.20"
-tokio = { version = "1.53.1", features = ["fs", "rt"] }
+rusqlite = { version = "0.40.2", features = ["backup", "bundled"] }
+tar = "0.4.46"
+tempfile = "3.27.0"
+tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "process", "rt"] }
+tracing = "0.1.44"
 walkdir = "2.5.0"

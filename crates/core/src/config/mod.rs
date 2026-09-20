@@ -146,6 +146,58 @@ pub enum SourceConfig {
         #[serde(default)]
         exclude: Vec<String>,
     },
+    Postgres {
+        host: String,
+        #[serde(default = "default_postgres_port")]
+        port: u16,
+        user: String,
+        password_env: String,
+        database: String,
+        /// Se impostato, `pg_dump` viene eseguito con `docker exec` dentro
+        /// questo container invece che con il binario locale (utile per
+        /// evitare disallineamenti di versione col server).
+        #[serde(default)]
+        container: Option<String>,
+    },
+    MySql {
+        host: String,
+        #[serde(default = "default_mysql_port")]
+        port: u16,
+        user: String,
+        password_env: String,
+        database: String,
+        #[serde(default)]
+        container: Option<String>,
+    },
+    Sqlite {
+        /// Percorso del file del database SQLite da salvare.
+        path: String,
+    },
+    DockerVolume {
+        volume: String,
+    },
+    /// Sorgente generica: esegue un comando e ne cattura lo stdout come
+    /// unico file dell'archivio.
+    Command {
+        command: String,
+        #[serde(default)]
+        args: Vec<String>,
+        /// Nome del file in cui viene salvato lo stdout del comando.
+        #[serde(default = "default_command_output_filename")]
+        output_filename: String,
+    },
+}
+
+fn default_postgres_port() -> u16 {
+    5432
+}
+
+fn default_mysql_port() -> u16 {
+    3306
+}
+
+fn default_command_output_filename() -> String {
+    "output".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,4 +268,14 @@ pub struct JobConfig {
     pub retention: Retention,
     #[serde(default)]
     pub notify: NotifyConfig,
+    /// Comandi shell eseguiti prima di preparare la sorgente: un loro
+    /// fallimento interrompe il job (utile per operazioni di cui il backup
+    /// dipende, es. un checkpoint del database).
+    #[serde(default)]
+    pub pre: Vec<String>,
+    /// Comandi shell eseguiti dopo un backup riuscito: un loro fallimento
+    /// viene solo loggato, non fa fallire il job (il backup è già andato a
+    /// buon fine).
+    #[serde(default)]
+    pub post: Vec<String>,
 }

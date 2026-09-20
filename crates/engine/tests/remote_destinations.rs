@@ -72,6 +72,8 @@ fn build_config(
             max_backup_age_hours: None,
             retention: Retention::default(),
             notify: NotifyConfig::default(),
+            pre: Vec::new(),
+            post: Vec::new(),
         },
     );
 
@@ -150,6 +152,8 @@ async fn assert_retention_prunes_old_backups(
                 monthly: None,
             },
             notify: NotifyConfig::default(),
+            pre: Vec::new(),
+            post: Vec::new(),
         },
     );
     let config = Config {

@@ -52,6 +52,8 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
                 monthly: None,
             },
             notify: NotifyConfig::default(),
+            pre: Vec::new(),
+            post: Vec::new(),
         },
     );
 

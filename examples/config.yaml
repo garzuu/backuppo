@@ -78,3 +78,34 @@ jobs:
         - ops-email
       on_verify:
         - ops-telegram
+
+  # Esempio PostgreSQL. Se `container` è presente, pg_dump viene eseguito
+  # dentro quel container; se è assente, viene usato il pg_dump locale.
+  app-postgres:
+    source:
+      type: postgres
+      host: localhost
+      port: 5432
+      user: postgres
+      password_env: POSTGRES_PASSWORD
+      database: app
+      container: app-postgres
+    destination: local-nas
+    compression: zstd
+    encryption:
+      type: age
+      passphrase_env: BACKUP_PASSPHRASE
+    schedule: "30 3 * * *"
+    verify_restore: weekly
+    pre:
+      - "echo 'inizio backup database'"
+    post:
+      - "echo 'backup database completato'"
+
+  # Altre sorgenti supportate:
+  # source: { type: mysql, host: localhost, port: 3306, user: root,
+  #           password_env: MYSQL_PASSWORD, database: app, container: app-mysql }
+  # source: { type: sqlite, path: /var/lib/app/app.sqlite }
+  # source: { type: docker_volume, volume: app_data }
+  # source: { type: command, command: /usr/local/bin/export-data,
+  #           args: ["--format", "json"], output_filename: export.json }

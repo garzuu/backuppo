@@ -144,12 +144,12 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 7 — Sorgenti database e Docker
 
-- [ ] Postgres (`pg_dump`, anche dentro container via Docker)
-- [ ] MySQL/MariaDB (`mysqldump`)
-- [ ] SQLite (backup consistente con `.backup`)
-- [ ] Volumi Docker (`bollard`)
-- [ ] Sorgente "comando custom" (stdout) e hook `pre`/`post`
-- [ ] Verifica restore per DB: caricare il dump in un container temporaneo ed eseguire una query di sanità
+- [x] Postgres (`pg_dump`, anche dentro container via Docker)
+- [x] MySQL/MariaDB (`mysqldump`)
+- [x] SQLite (backup consistente con `.backup`)
+- [x] Volumi Docker (`bollard`)
+- [x] Sorgente "comando custom" (stdout) e hook `pre`/`post`
+- [x] Verifica restore per DB: caricare il dump in un container temporaneo ed eseguire una query di sanità
 
 **Fatto quando:** un dump Postgres viene ripristinato in un container usa e getta e la query di controllo passa.
 

@@ -56,6 +56,7 @@ pub(crate) async fn verify_job_impl(
         ))
     })?;
     let destination = backuppo_destinations::build(dest_config)?;
+    let source = backuppo_sources::build(&job.source)?;
 
     let name = find_latest(destination.as_ref(), job_name).await?;
     check_age(job_name, &name, job.max_backup_age_hours);
@@ -113,6 +114,12 @@ pub(crate) async fn verify_job_impl(
                     "job '{job_name}': verifica del restore fallita su '{name}': {e}"
                 ))
             })?;
+
+    source.verify_restore(&extract_dir).await.map_err(|e| {
+        BackupError::Other(format!(
+            "job '{job_name}': verifica specifica della sorgente fallita su '{name}': {e}"
+        ))
+    })?;
 
     info!(
         files,

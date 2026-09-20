@@ -42,6 +42,8 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
             max_backup_age_hours: None,
             retention: Retention::default(),
             notify: NotifyConfig::default(),
+            pre: Vec::new(),
+            post: Vec::new(),
         },
     );
 
@@ -169,4 +171,70 @@ async fn wrong_passphrase_fails_to_restore() {
         Some("wrong-passphrase"),
     );
     assert!(result.is_err(), "una passphrase sbagliata deve fallire");
+}
+
+#[tokio::test]
+async fn pre_and_post_hooks_run_in_order_around_the_backup() {
+    let src_dir = tempfile::tempdir().unwrap();
+    let dst_dir = tempfile::tempdir().unwrap();
+    let marker_dir = tempfile::tempdir().unwrap();
+    let generated = src_dir.path().join("generated.txt");
+    let marker = marker_dir.path().join("post-ran.txt");
+    let mut config = build_config(src_dir.path(), dst_dir.path());
+    let job = config.jobs.get_mut("documents").unwrap();
+    job.encryption = None;
+    job.compression = Some(Compression::None);
+    #[cfg(windows)]
+    {
+        job.pre = vec![format!("echo hook-content> \"{}\"", generated.display())];
+        job.post = vec![format!("echo done> \"{}\"", marker.display())];
+    }
+    #[cfg(not(windows))]
+    {
+        job.pre = vec![format!("printf hook-content > '{}'", generated.display())];
+        job.post = vec![format!("printf done > '{}'", marker.display())];
+    }
+
+    let artifact = run_job("documents", &config).await.expect("job con hook");
+    assert_eq!(artifact.files, 1, "il file creato dal pre hook va incluso");
+    assert_eq!(fs::read_to_string(&marker).unwrap(), "done");
+}
+
+#[tokio::test]
+async fn a_failing_pre_hook_stops_the_backup() {
+    let src_dir = tempfile::tempdir().unwrap();
+    let dst_dir = tempfile::tempdir().unwrap();
+    write_file(&src_dir.path().join("a.txt"), "data");
+    let mut config = build_config(src_dir.path(), dst_dir.path());
+    let job = config.jobs.get_mut("documents").unwrap();
+    job.pre = vec![if cfg!(windows) {
+        "exit /B 7".to_string()
+    } else {
+        "exit 7".to_string()
+    }];
+
+    let error = run_job("documents", &config)
+        .await
+        .expect_err("il pre hook deve fermare il job");
+    assert!(error.to_string().contains("hook pre #1"));
+    assert_eq!(fs::read_dir(dst_dir.path()).unwrap().count(), 0);
+}
+
+#[tokio::test]
+async fn a_failing_post_hook_does_not_invalidate_an_uploaded_backup() {
+    let src_dir = tempfile::tempdir().unwrap();
+    let dst_dir = tempfile::tempdir().unwrap();
+    write_file(&src_dir.path().join("a.txt"), "data");
+    let mut config = build_config(src_dir.path(), dst_dir.path());
+    let job = config.jobs.get_mut("documents").unwrap();
+    job.post = vec![if cfg!(windows) {
+        "exit /B 9".to_string()
+    } else {
+        "exit 9".to_string()
+    }];
+
+    run_job("documents", &config)
+        .await
+        .expect("il backup caricato resta riuscito");
+    assert_eq!(fs::read_dir(dst_dir.path()).unwrap().count(), 1);
 }

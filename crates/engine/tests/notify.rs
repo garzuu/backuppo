@@ -88,6 +88,8 @@ fn build_config(
                 on_failure: vec!["primary".to_string(), "escalation".to_string()],
                 on_verify: vec![],
             },
+            pre: Vec::new(),
+            post: Vec::new(),
         },
     );
 

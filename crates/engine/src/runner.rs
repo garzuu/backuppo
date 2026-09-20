@@ -4,7 +4,8 @@ use backuppo_core::config::{Compression, Config, EncryptionConfig, VerifyRestore
 use backuppo_core::error::BackupError;
 use backuppo_core::model::{Artifact, JobEvent};
 use backuppo_core::secrets::resolve_env;
-use tracing::{info, instrument};
+use tokio::process::Command;
+use tracing::{info, instrument, warn};
 
 use crate::{archive, manifest, notify, verify};
 
@@ -55,6 +56,8 @@ async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, Backu
 
     let source = backuppo_sources::build(&job.source)?;
     let destination = backuppo_destinations::build(dest_config)?;
+
+    run_hooks("pre", &job.pre).await?;
 
     let staging_root = tempfile::tempdir()?;
     let staging_data = staging_root.path().join("data");
@@ -131,8 +134,38 @@ async fn run_job_impl(job_name: &str, config: &Config) -> Result<Artifact, Backu
         verify_result?;
     }
 
+    if let Err(error) = run_hooks("post", &job.post).await {
+        warn!(%error, "hook post fallito dopo il completamento del backup");
+    }
+
     info!("job completato con successo");
     Ok(final_artifact)
+}
+
+async fn run_hooks(kind: &str, hooks: &[String]) -> Result<(), BackupError> {
+    for (index, hook) in hooks.iter().enumerate() {
+        info!(hook_kind = kind, hook_number = index + 1, "esecuzione hook");
+        #[cfg(windows)]
+        let output = Command::new("cmd").args(["/C", hook]).output().await;
+        #[cfg(not(windows))]
+        let output = Command::new("sh").args(["-c", hook]).output().await;
+
+        let output = output.map_err(|e| {
+            BackupError::Other(format!(
+                "hook {kind} #{}: impossibile avviare la shell: {e}",
+                index + 1
+            ))
+        })?;
+        if !output.status.success() {
+            return Err(BackupError::Other(format!(
+                "hook {kind} #{} fallito con {}: {}",
+                index + 1,
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Risolve la passphrase di cifratura dalla config del job, se presente.

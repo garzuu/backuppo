@@ -43,6 +43,8 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
             max_backup_age_hours: None,
             retention: Retention::default(),
             notify: NotifyConfig::default(),
+            pre: Vec::new(),
+            post: Vec::new(),
         },
     );
 

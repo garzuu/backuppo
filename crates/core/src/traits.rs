@@ -11,6 +11,15 @@ use crate::model::{Artifact, JobEvent};
 pub trait Source: Send + Sync {
     async fn prepare(&self, staging: &Path) -> Result<Artifact, BackupError>;
     async fn cleanup(&self, artifact: &Artifact) -> Result<(), BackupError>;
+
+    /// Controllo di sanità aggiuntivo, specifico della sorgente, eseguito
+    /// da `verify` dopo che il restore generico (manifest/checksum) è già
+    /// passato: per una sorgente file non c'è altro da fare (default
+    /// no-op), ma una sorgente database può caricare il dump ripristinato
+    /// in un'istanza usa e getta ed eseguire una query di sanità.
+    async fn verify_restore(&self, _restored_dir: &Path) -> Result<(), BackupError> {
+        Ok(())
+    }
 }
 
 /// Trasferisce un `Artifact` verso/da uno storage (locale, sftp, s3, webdav).
