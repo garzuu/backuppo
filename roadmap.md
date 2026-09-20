@@ -103,11 +103,11 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 3 — Verifica restore (il differenziatore)
 
-- [ ] Comando `backupper verify --job <nome>`: scarica l'ultimo backup, decifra, decomprime in dir temporanea
-- [ ] Controlli per cartelle: numero di file, dimensioni, checksum di un campione
-- [ ] Config `verify_restore: never | every | daily | weekly` per job
-- [ ] Evento `RestoreVerified` con dettaglio
-- [ ] Allarme "backup troppo vecchio" (soglia configurabile)
+- [x] Comando `backupper verify --job <nome>`: scarica l'ultimo backup, decifra, decomprime in dir temporanea
+- [x] Controlli per cartelle: numero di file, dimensioni, checksum di un campione
+- [x] Config `verify_restore: never | every | daily | weekly` per job
+- [x] Evento `RestoreVerified` con dettaglio
+- [x] Allarme "backup troppo vecchio" (soglia configurabile)
 
 **Fatto quando:** un backup corrotto di proposito (byte alterato) fa fallire la verifica con messaggio chiaro.
 

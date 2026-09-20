@@ -46,6 +46,7 @@ jobs:
       passphrase_env: BACKUP_PASSPHRASE
     schedule: "0 3 * * *" # ogni giorno alle 03:00
     verify_restore: daily
+    max_backup_age_hours: 26 # allarme se l'ultimo backup ha più di 26h
     retention:
       daily: 7
       weekly: 4

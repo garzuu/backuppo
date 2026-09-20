@@ -39,6 +39,7 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
             }),
             schedule: "0 3 * * *".to_string(),
             verify_restore: None,
+            max_backup_age_hours: None,
             retention: Retention::default(),
             notify: NotifyConfig::default(),
         },
@@ -78,6 +79,9 @@ fn collect_files(root: &std::path::Path) -> Vec<String> {
                 .to_string_lossy()
                 .replace('\\', "/")
         })
+        // il manifest è un dettaglio implementativo dell'engine, non fa
+        // parte del contenuto originale della sorgente.
+        .filter(|rel| rel != backupper_engine::MANIFEST_FILENAME)
         .collect()
 }
 

@@ -1,12 +1,12 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use backupper_core::config::{Compression, Config, EncryptionConfig};
+use backupper_core::config::{Compression, Config, EncryptionConfig, VerifyRestore};
 use backupper_core::error::BackupError;
 use backupper_core::model::Artifact;
 use backupper_core::secrets::resolve_env;
 use tracing::{info, instrument};
 
-use crate::archive;
+use crate::{archive, manifest, verify};
 
 /// Esegue il job `job_name` definito in `config`: prepara la sorgente,
 /// costruisce l'archivio (tar [+ zstd] [+ age]) e lo carica sulla
@@ -34,6 +34,14 @@ pub async fn run_job(job_name: &str, config: &Config) -> Result<Artifact, Backup
     info!("avvio preparazione sorgente");
     let raw = source.prepare(&staging_data).await?;
     info!(files = raw.files, bytes = raw.bytes, "sorgente preparata");
+
+    let manifest_dir = raw.path.clone();
+    tokio::task::spawn_blocking(move || {
+        let manifest = manifest::build(&manifest_dir)?;
+        manifest::write(&manifest_dir, &manifest)
+    })
+    .await
+    .map_err(|e| BackupError::Other(format!("task di manifest interrotto: {e}")))??;
 
     let compress = !matches!(job.compression, Some(Compression::None));
     let passphrase = resolve_passphrase(job_name, job.encryption.as_ref())?;
@@ -81,15 +89,24 @@ pub async fn run_job(job_name: &str, config: &Config) -> Result<Artifact, Backup
     );
     destination.upload(&final_artifact).await?;
     source.cleanup(&raw).await?;
-    info!("job completato con successo");
+    info!("upload completato");
 
+    // "Un backup si considera riuscito solo dopo che l'upload è confermato
+    // e (se attivo) il restore è verificato": con `verify_restore: every` la
+    // verifica fa parte del criterio di successo del job.
+    if job.verify_restore == Some(VerifyRestore::Every) {
+        info!("verify_restore=every: avvio verifica restore");
+        verify::verify_job(job_name, config).await?;
+    }
+
+    info!("job completato con successo");
     Ok(final_artifact)
 }
 
 /// Risolve la passphrase di cifratura dalla config del job, se presente.
 /// MVP: supporta solo `age` con `passphrase_env` (le chiavi asimmetriche
 /// sono fuori scope per questa fase).
-fn resolve_passphrase(
+pub(crate) fn resolve_passphrase(
     job_name: &str,
     encryption: Option<&EncryptionConfig>,
 ) -> Result<Option<String>, BackupError> {

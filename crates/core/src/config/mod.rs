@@ -110,7 +110,7 @@ pub enum EncryptionConfig {
     None,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VerifyRestore {
     Never,
@@ -150,6 +150,11 @@ pub struct JobConfig {
     pub schedule: String,
     #[serde(default)]
     pub verify_restore: Option<VerifyRestore>,
+    /// Soglia (in ore) oltre la quale l'ultimo backup disponibile è
+    /// considerato troppo vecchio: `backupper verify` segnala un allarme
+    /// (non bloccante) se superata.
+    #[serde(default)]
+    pub max_backup_age_hours: Option<u64>,
     #[serde(default)]
     pub retention: Retention,
     #[serde(default)]

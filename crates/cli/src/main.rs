@@ -30,6 +30,13 @@ enum Command {
         #[arg(long)]
         job: String,
     },
+    /// Verifica che l'ultimo backup di un job sia ripristinabile e integro.
+    Verify {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+    },
 }
 
 #[tokio::main]
@@ -42,6 +49,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Check { config } => check(&config),
         Command::Run { config, job } => run(&config, &job).await,
+        Command::Verify { config, job } => verify(&config, &job).await,
     }
 }
 
@@ -106,6 +114,25 @@ async fn run(config_path: &PathBuf, job_name: &str) -> Result<()> {
             };
             eprintln!("{event}");
             bail!("job fallito");
+        }
+    }
+}
+
+async fn verify(config_path: &PathBuf, job_name: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+
+    match backupper_engine::verify_job(job_name, &config).await {
+        Ok(event) => {
+            println!("{event}");
+            Ok(())
+        }
+        Err(err) => {
+            let event = JobEvent::Failure {
+                job: job_name.to_string(),
+                error: err.to_string(),
+            };
+            eprintln!("{event}");
+            bail!("verifica fallita");
         }
     }
 }
