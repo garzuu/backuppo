@@ -16,6 +16,14 @@ Tool di backup generico, cross-platform (Linux/Windows/macOS), open source, dist
 
 Modello di un job: `sorgente → (compressione + cifratura) → destinazione → notifiche`
 
+## Architettura a tre pezzi
+
+1. **Agent** (questo tool): gira su ogni server/sito, esegue i job, notifica. **È il prodotto principale e funziona sempre stand-alone.**
+2. **Hub** (futuro, opzionale): server centrale che riceve gli stati dagli agent, controlla gli heartbeat, gestisce clienti/siti/utenti ed espone l'API.
+3. **App Flutter** (futura, opzionale): client dell'hub per controllare lo stato di tutti i siti e ricevere notifiche push.
+
+Ordine di sviluppo: prima l'agent fino a `v0.1.0` stabile, poi l'hub, poi l'app.
+
 ## Decisioni prese
 
 - Linguaggio: **Rust** (edition 2021), workspace con più crate.
@@ -25,6 +33,12 @@ Modello di un job: `sorgente → (compressione + cifratura) → destinazione →
 - Config: **YAML** con `serde_yaml`. I segreti non stanno nel file: si referenziano via `*_env`.
 - Async: `tokio`. Errori: `thiserror` nelle librerie, `anyhow` solo nel crate `cli`.
 - Fuori scope per l'MVP: immagini disco, VM, Exchange, VSS, GUI.
+- **Agent stand-alone**: l'hub è solo un `Notifier` (`type: hub`). Senza blocco `hub` nella config, l'agent non sa che esiste. Nessun crate dell'agent importa codice dell'hub.
+- **Hub come binario separato** (`crates/hub`), con i soli tipi condivisi (eventi, modelli) in `core`. Il client dell'hub nell'agent sta dietro il Cargo feature flag `hub`.
+- Gli agent parlano con l'hub solo in **uscita** (push), così funzionano dietro NAT/firewall. Inviano **solo metadati** (esiti, durate, errori), mai contenuto dei backup né segreti.
+- API dell'hub **versionata** (`/v1/...`) fin dall'inizio.
+- Modello dati hub: `Organizzazione/Cliente → Sito → Job → Esecuzione`, con ruoli (admin, sola lettura).
+- App: **Flutter** (Riverpod, `dio`, `go_router`, `drift`, `fl_chart`).
 
 ## Struttura del workspace
 
@@ -33,12 +47,14 @@ backupper/
 ├── Cargo.toml              # workspace
 ├── ROADMAP.md
 ├── crates/
-│   ├── core/               # trait, tipi, errori, config (nessuna dipendenza interna)
+│   ├── core/               # trait, tipi (inclusi eventi condivisi), errori, config
 │   ├── engine/             # esecuzione job, retention, verifica restore
 │   ├── sources/            # folder, postgres, mysql, sqlite, docker-volume, command
 │   ├── destinations/       # local, sftp, s3, webdav (via opendal)
-│   ├── notifiers/          # smtp, telegram, webhook
-│   └── cli/                # binario: clap, scheduler, logging
+│   ├── notifiers/          # smtp, telegram, webhook, hub (feature `hub`)
+│   ├── cli/                # binario agent: clap, scheduler, logging
+│   └── hub/                # (Fase 11) binario hub: API, DB, heartbeat
+├── app/                    # (Fase 12) app Flutter
 └── examples/config.yaml
 ```
 
@@ -75,12 +91,13 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 2 — Primo giro end to end (cartella → locale)
 
-- [ ] `Source` cartella (staging, conteggio file/byte, esclusioni glob)
-- [ ] Engine: tar + zstd + cifratura `age` (chiave/passphrase da env)
-- [ ] `Destination` locale (opendal fs)
-- [ ] Comando `backupper run --config c.yaml --job <nome>`
-- [ ] Logging strutturato con `tracing`
-- [ ] Test di integrazione: backup di una cartella temporanea e confronto contenuto
+- [x] `Source` cartella (staging, conteggio file/byte, esclusioni glob)
+- [x] Engine: tar + zstd + cifratura `age` (chiave/passphrase da env)
+- [x] `Destination` locale (opendal fs)
+- [x] Comando `backupper run --config c.yaml --job <nome>`
+- [x] Logging strutturato con `tracing`
+- [x] Il core non stampa risultati "a mano": ogni esito passa da `JobEvent`
+- [x] Test di integrazione: backup di una cartella temporanea e confronto contenuto
 
 **Fatto quando:** un job cartella → directory locale produce un archivio cifrato e il test lo ripristina identico.
 
@@ -135,16 +152,17 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 **Fatto quando:** un dump Postgres viene ripristinato in un container usa e getta e la query di controllo passa.
 
-## Fase 8 — Report e osservabilità
+## Fase 8 — Report e osservabilità (locale)
 
 - [ ] Report periodico via mail (es. "7 job ok, 1 fallito, ultimo restore test: ieri")
 - [ ] Webhook generico (copre Slack, Discord, ntfy)
 - [ ] Pagina di stato HTML statica generata a ogni run
-- [ ] Storico esecuzioni (SQLite locale o file JSON)
+- [ ] **Storico esecuzioni strutturato** (SQLite locale o JSON): job, esito, durata, byte, errore, esito verifica restore. Serve poi come base per hub e app
+- [ ] Log per esecuzione consultabile da CLI (`backupper runs`, `backupper logs <id>`)
 
-**Fatto quando:** arriva il report settimanale con lo stato reale di ogni job.
+**Fatto quando:** arriva il report settimanale con lo stato reale di ogni job e lo storico è interrogabile da CLI.
 
-## Fase 9 — Release
+## Fase 9 — Release agent
 
 - [ ] Build statici Linux (musl), Windows e macOS via CI
 - [ ] Immagine Docker minimale
@@ -155,9 +173,49 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 ## Fase 10 — Dopo l'MVP (da valutare)
 
 - [ ] Motore incrementale/dedup (chunking, oppure integrazione restic)
-- [ ] Web UI leggera sopra un'API locale (stato, log, avvio manuale)
+- [ ] Web UI leggera sopra un'API locale dell'agent (stato, log, avvio manuale)
 - [ ] Google Drive / Dropbox / OneDrive (via opendal)
 - [ ] Immagini disco / VM (solo se c'è domanda reale)
+
+## Fase 11 — Hub multi-sito (dopo `v0.1.0` stabile)
+
+Prerequisito: agent stabile, storico strutturato (Fase 8).
+
+**Lato agent**
+- [ ] `Notifier` di tipo `hub` dietro feature flag `hub` (config: `url`, `token_env`, `heartbeat`)
+- [ ] Heartbeat periodico dal daemon
+- [ ] Coda locale degli eventi non inviati (file/SQLite) con retry e backoff
+- [ ] Un errore di invio all'hub viene loggato ma **non fa mai fallire un job**
+- [ ] Test: l'agent compila, gira e passa tutti i test **senza** la feature `hub`
+
+**Lato hub (`crates/hub`, binario separato)**
+- [ ] API `/v1`: registrazione eventi, elenco clienti/siti/job/esecuzioni, log
+- [ ] Database (SQLite per iniziare, Postgres opzionale)
+- [ ] Modello `Cliente → Sito → Job → Esecuzione` e ruoli (admin, sola lettura)
+- [ ] Token per agent, creazione e revoca singola
+- [ ] Login utenti con JWT a scadenza breve + refresh token
+- [ ] **Rilevamento offline**: sito senza heartbeat da X minuti → stato `offline` + notifica
+- [ ] Notifiche dell'hub (mail/Telegram/push) su fallimenti, verifiche fallite, siti offline
+- [ ] Web UI minimale per test e uso senza app
+- [ ] Immagine Docker dell'hub e guida al deploy dietro reverse proxy HTTPS
+
+**Fatto quando:** due agent su macchine diverse mandano stato all'hub, uno viene spento e l'hub lo segna offline e notifica. Con l'hub giù, gli agent continuano a fare backup e rispediscono gli eventi al ritorno.
+
+## Fase 12 — App Flutter
+
+Prerequisito: API hub `/v1` stabile.
+
+- [ ] Progetto Flutter in `app/` (Riverpod, `dio`, `go_router`, `drift` per cache offline, `fl_chart`)
+- [ ] Login e gestione connessione all'hub
+- [ ] Home con semaforo per sito: ok / warning / errore / offline
+- [ ] Dettaglio sito → job → esecuzione con log ed errore
+- [ ] Stato ultima verifica restore per ogni job
+- [ ] Filtri per cliente e ricerca
+- [ ] Notifiche push (Firebase, oppure ntfy/UnifiedPush se self-hosted)
+- [ ] Azioni opzionali con permesso dedicato: "esegui ora", "verifica ora"
+- [ ] Gestione siti e token agent (creazione, revoca)
+
+**Fatto quando:** dal telefono vedi lo stato di tutti i siti, ricevi la push di un fallimento e apri il log dell'errore.
 
 ---
 
@@ -168,9 +226,13 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 - Un backup si considera riuscito **solo** dopo che l'upload è confermato e (se attivo) il restore è verificato.
 - Ogni nuova sorgente/destinazione/notifier implementa il trait di `core` e ha almeno un test di integrazione.
 - Errori sempre con contesto: quale job, quale fase, quale risorsa.
+- **L'agent deve compilare, girare e passare tutti i test senza hub.** Le feature dell'hub stanno dietro il feature flag `hub` o in un crate separato; nessun crate dell'agent dipende dall'hub.
+- Gli agent inviano all'hub solo metadati, mai contenuto dei backup né segreti.
 
 ## Rischi da tenere d'occhio
 
 - Allargare troppo lo scope prima che il nucleo (Fase 2–3) funzioni.
+- Iniziare hub o app prima che l'agent sia stabile.
 - Complessità di async e trait object: preferisci soluzioni semplici (`Box<dyn Trait>` con `async_trait`).
 - Cross-compile Windows/macOS: verifica in CI fin dalle prime fasi, non alla fine.
+- Rompere la compatibilità tra agent e hub: versiona l'API (`/v1`) e non cambiare campi esistenti.

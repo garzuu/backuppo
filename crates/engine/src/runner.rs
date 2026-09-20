@@ -1,0 +1,115 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use backupper_core::config::{Compression, Config, EncryptionConfig};
+use backupper_core::error::BackupError;
+use backupper_core::model::Artifact;
+use backupper_core::secrets::resolve_env;
+use tracing::{info, instrument};
+
+use crate::archive;
+
+/// Esegue il job `job_name` definito in `config`: prepara la sorgente,
+/// costruisce l'archivio (tar [+ zstd] [+ age]) e lo carica sulla
+/// destination configurata. Ritorna l'`Artifact` finale caricato.
+#[instrument(skip(job_name, config), fields(job = job_name))]
+pub async fn run_job(job_name: &str, config: &Config) -> Result<Artifact, BackupError> {
+    let job = config
+        .jobs
+        .get(job_name)
+        .ok_or_else(|| BackupError::Other(format!("job '{job_name}' non trovato in config")))?;
+
+    let dest_config = config.destinations.get(&job.destination).ok_or_else(|| {
+        BackupError::Other(format!(
+            "destination '{}' non trovata in config (job '{job_name}')",
+            job.destination
+        ))
+    })?;
+
+    let source = backupper_sources::build(&job.source)?;
+    let destination = backupper_destinations::build(dest_config)?;
+
+    let staging_root = tempfile::tempdir()?;
+    let staging_data = staging_root.path().join("data");
+
+    info!("avvio preparazione sorgente");
+    let raw = source.prepare(&staging_data).await?;
+    info!(files = raw.files, bytes = raw.bytes, "sorgente preparata");
+
+    let compress = !matches!(job.compression, Some(Compression::None));
+    let passphrase = resolve_passphrase(job_name, job.encryption.as_ref())?;
+
+    let mut filename = format!("{job_name}-{}.tar", unix_timestamp());
+    if compress {
+        filename.push_str(".zst");
+    }
+    if passphrase.is_some() {
+        filename.push_str(".age");
+    }
+
+    let archive_path = staging_root.path().join(&filename);
+    let raw_path = raw.path.clone();
+    let archive_path_for_task = archive_path.clone();
+    let passphrase_for_task = passphrase.clone();
+    tokio::task::spawn_blocking(move || {
+        archive::build_archive(
+            &raw_path,
+            &archive_path_for_task,
+            compress,
+            passphrase_for_task.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| BackupError::Other(format!("task di archiviazione interrotto: {e}")))??;
+
+    let checksum_path = archive_path.clone();
+    let checksum = tokio::task::spawn_blocking(move || archive::sha256_file(&checksum_path))
+        .await
+        .map_err(|e| BackupError::Other(format!("task di checksum interrotto: {e}")))??;
+    let bytes = tokio::fs::metadata(&archive_path).await?.len();
+
+    let final_artifact = Artifact {
+        path: archive_path,
+        bytes,
+        files: raw.files,
+        checksum,
+    };
+
+    info!(
+        bytes = final_artifact.bytes,
+        checksum = %final_artifact.checksum,
+        "archivio pronto, avvio upload"
+    );
+    destination.upload(&final_artifact).await?;
+    source.cleanup(&raw).await?;
+    info!("job completato con successo");
+
+    Ok(final_artifact)
+}
+
+/// Risolve la passphrase di cifratura dalla config del job, se presente.
+/// MVP: supporta solo `age` con `passphrase_env` (le chiavi asimmetriche
+/// sono fuori scope per questa fase).
+fn resolve_passphrase(
+    job_name: &str,
+    encryption: Option<&EncryptionConfig>,
+) -> Result<Option<String>, BackupError> {
+    match encryption {
+        None | Some(EncryptionConfig::None) => Ok(None),
+        Some(EncryptionConfig::Age { passphrase_env: Some(var), .. }) => {
+            Ok(Some(resolve_env("encryption.passphrase_env", var)?))
+        }
+        Some(EncryptionConfig::Age { key_env: Some(_), .. }) => Err(BackupError::Other(format!(
+            "job '{job_name}': cifratura age con 'key_env' non ancora supportata (solo 'passphrase_env' in questa fase)"
+        ))),
+        Some(EncryptionConfig::Age { .. }) => Err(BackupError::Other(format!(
+            "job '{job_name}': encryption 'age' richiede 'passphrase_env'"
+        ))),
+    }
+}
+
+fn unix_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}

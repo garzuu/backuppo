@@ -5,4 +5,16 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+age = "0.12.1"
 backupper-core.workspace = true
+backupper-destinations.workspace = true
+backupper-sources.workspace = true
+sha2 = "0.11.0"
+tar = "0.4.46"
+tempfile = "3.27.0"
+tokio = { version = "1.53.1", features = ["fs", "rt", "rt-multi-thread"] }
+tracing = "0.1.44"
+zstd = "0.14.0"
+
+[dev-dependencies]
+walkdir = "2.5.0"
