@@ -301,6 +301,7 @@ async fn create_site(
 #[derive(Serialize)]
 struct AgentTokenResponse {
     agent_token: String,
+    token_id: i64,
 }
 
 async fn create_agent_token(
@@ -316,12 +317,13 @@ async fn create_agent_token(
         .map_err(internal_error)?
         .ok_or((StatusCode::NOT_FOUND, "sito non trovato".to_string()))?;
     let (plaintext, hash) = auth::generate_opaque_token();
-    state
+    let token_id = state
         .db
         .create_agent_token(site_id, &hash, now())
         .map_err(internal_error)?;
     Ok(Json(AgentTokenResponse {
         agent_token: plaintext,
+        token_id,
     }))
 }
 

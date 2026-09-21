@@ -93,43 +93,43 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 
 ## Fase 2 — Primo giro end to end (cartella → locale)
 
-- [ ] `Source` cartella (staging, conteggio file/byte, esclusioni glob)
-- [ ] Engine: tar + zstd + cifratura `age` (chiave/passphrase da env)
-- [ ] `Destination` locale (opendal fs)
-- [ ] Comando `bkpo run --config c.yaml --job <nome>`
-- [ ] Logging strutturato con `tracing`
-- [ ] Il core non stampa risultati "a mano": ogni esito passa da `JobEvent`
-- [ ] Test di integrazione: backup di una cartella temporanea e confronto contenuto
+- [x] `Source` cartella (staging, conteggio file/byte, esclusioni glob)
+- [x] Engine: tar + zstd + cifratura `age` (chiave/passphrase da env)
+- [x] `Destination` locale (opendal fs)
+- [x] Comando `bkpo run --config c.yaml --job <nome>`
+- [x] Logging strutturato con `tracing`
+- [x] Il core non stampa risultati "a mano": ogni esito passa da `JobEvent`
+- [x] Test di integrazione: backup di una cartella temporanea e confronto contenuto
 
 **Fatto quando:** un job cartella → directory locale produce un archivio cifrato e il test lo ripristina identico.
 
 ## Fase 3 — Verifica restore (il differenziatore)
 
-- [ ] Comando `bkpo verify --job <nome>`: scarica l'ultimo backup, decifra, decomprime in dir temporanea
-- [ ] Controlli per cartelle: numero di file, dimensioni, checksum di un campione
-- [ ] Config `verify_restore: never | every | daily | weekly` per job
-- [ ] Evento `RestoreVerified` con dettaglio
-- [ ] Allarme "backup troppo vecchio" (soglia configurabile)
+- [x] Comando `bkpo verify --job <nome>`: scarica l'ultimo backup, decifra, decomprime in dir temporanea
+- [x] Controlli per cartelle: numero di file, dimensioni, checksum di un campione
+- [x] Config `verify_restore: never | every | daily | weekly` per job
+- [x] Evento `RestoreVerified` con dettaglio
+- [x] Allarme "backup troppo vecchio" (soglia configurabile)
 
 **Fatto quando:** un backup corrotto di proposito (byte alterato) fa fallire la verifica con messaggio chiaro.
 
 ## Fase 4 — Notifiche
 
-- [ ] Notifier Telegram (reqwest + rustls, chiamata `sendMessage`)
-- [ ] Notifier SMTP (`lettre`, STARTTLS e TLS implicito)
-- [ ] Regole per job: `on_success`, `on_failure`, `on_verify`
-- [ ] Comando `bkpo notify-test` per provare i canali
-- [ ] Test con mock server per Telegram e SMTP locale
+- [x] Notifier Telegram (reqwest + rustls, chiamata `sendMessage`)
+- [x] Notifier SMTP (`lettre`, STARTTLS e TLS implicito)
+- [x] Regole per job: `on_success`, `on_failure`, `on_verify`
+- [x] Comando `bkpo notify-test` per provare i canali
+- [x] Test con mock server per Telegram e SMTP locale
 
 **Fatto quando:** un job fallito manda mail e Telegram, un job riuscito solo Telegram, come da config.
 
 ## Fase 5 — Scheduler e retention
 
-- [ ] Modalità daemon: `bkpo daemon` con scheduler cron-like (`tokio-cron-scheduler`)
-- [ ] Un job non parte se il precedente è ancora in esecuzione (lock)
-- [ ] Retention `daily/weekly/monthly` con cancellazione dei backup scaduti
-- [ ] Retention **mai** distruttiva se l'ultimo backup è fallito o non verificato
-- [ ] Shutdown pulito su SIGTERM/Ctrl+C
+- [x] Modalità daemon: `bkpo daemon` con scheduler cron-like (`tokio-cron-scheduler`)
+- [x] Un job non parte se il precedente è ancora in esecuzione (lock)
+- [x] Retention `daily/weekly/monthly` con cancellazione dei backup scaduti
+- [x] Retention **mai** distruttiva se l'ultimo backup è fallito o non verificato
+- [x] Shutdown pulito su SIGTERM/Ctrl+C
 
 **Fatto quando:** il daemon esegue due job schedulati e applica la retention senza cancellare l'unico backup valido.
 
@@ -211,15 +211,17 @@ così non serve pre-registrare i nomi dei job lato hub.
 
 Prerequisito: API hub `/v1` stabile. **Repo separato** da `backuppo` (vedi "Struttura del workspace").
 
-- [ ] Progetto Flutter in un repository dedicato (Riverpod, `dio`, `go_router`, `drift` per cache offline, `fl_chart`)
-- [ ] Login e gestione connessione all'hub
-- [ ] Home con semaforo per sito: ok / warning / errore / offline
-- [ ] Dettaglio sito → job → esecuzione con log ed errore
-- [ ] Stato ultima verifica restore per ogni job
-- [ ] Filtri per cliente e ricerca
-- [ ] Notifiche push (Firebase, oppure ntfy/UnifiedPush se self-hosted)
-- [ ] Azioni opzionali con permesso dedicato: "esegui ora", "verifica ora"
-- [ ] Gestione siti e token agent (creazione, revoca)
+- [x] Progetto Flutter in un repository dedicato (`~/Code/backuppo-app`; Riverpod, `dio`, `go_router`, `drift` per cache offline, `fl_chart`)
+- [x] Login e gestione connessione all'hub (URL, refresh automatico del token, sessione nello storage sicuro)
+- [x] Home con semaforo per sito: ok / warning / errore / offline
+- [x] Dettaglio sito → job → esecuzione con log ed errore
+- [x] Stato ultima verifica restore per ogni job
+- [x] Filtri per cliente e ricerca
+- [ ] Notifiche push (Firebase, oppure ntfy/UnifiedPush se self-hosted) — serve un canale lato hub verso i dispositivi
+- [ ] Azioni opzionali con permesso dedicato: "esegui ora", "verifica ora" — l'agent non ha ancora un canale di comando in ingresso (gli agent parlano solo in uscita)
+- [x] Gestione siti e token agent (creazione; revoca per ID — l'hub non ha ancora un endpoint per elencare i token)
+
+Nota: il semaforo è calcolato dall'app sugli eventi (l'hub non espone uno stato aggregato per sito oltre a online/offline). `POST /v1/sites/{id}/tokens` ora restituisce anche `token_id` (campo aggiunto, compatibile con `/v1`).
 
 **Fatto quando:** dal telefono vedi lo stato di tutti i siti, ricevi la push di un fallimento e apri il log dell'errore.
 
