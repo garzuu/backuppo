@@ -238,7 +238,7 @@ Nota: il semaforo è calcolato dall'app sugli eventi (l'hub non espone uno stato
 Obiettivo: chi arriva sul sito capisce in 30 secondi cosa fa Backuppo e come si installa.
 
 - [ ] Scelta dominio (`backuppo.dev` o simile, da verificare) e hosting statico (GitHub Pages o Cloudflare Pages)
-- [ ] Generatore di sito statico con docs integrate (es. Astro Starlight); i contenuti delle docs vivono in `docs/` nel repo, così restano versionati col codice
+- [x] Generatore di sito statico con docs integrate (Astro Starlight in `docs/`, contenuti in `docs/src/content/docs/`); versionati col codice. Archivi di release e link nel repo puntano ai singoli `.md`, non all'intero progetto Astro
 - [ ] **Landing page**: cos'è, il problema ("hai mai provato a fare il restore?"), il differenziatore (restore verificato), installazione in una riga, mascotte
 - [ ] **Demo** di 1–2 minuti (GIF o asciinema): backup → corruzione di un byte → `bkpo verify` che fallisce con messaggio chiaro
 - [ ] Tabella di confronto onesta con Iperius, restic, borg, kopia (cosa fa meglio, cosa non fa)

@@ -1,4 +1,7 @@
-# Quickstart
+---
+title: Quickstart
+description: Installazione, prima configurazione ed esecuzione del primo backup con Backuppo.
+---
 
 ## Installazione
 

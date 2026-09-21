@@ -73,7 +73,9 @@ jobs:
           mkdir -p "dist/${package}"
           cp "target/${{ matrix.target }}/release/bkpo" "dist/${package}/"
           cp README.md CHANGELOG.md LICENSE-APACHE LICENSE-MIT "dist/${package}/"
-          cp -R docs examples deploy "dist/${package}/"
+          cp -R examples deploy "dist/${package}/"
+          mkdir -p "dist/${package}/docs"
+          cp docs/src/content/docs/*.md "dist/${package}/docs/"
           tar -C dist -czf "dist/${package}.tar.gz" "${package}"
           rm -rf "dist/${package}"
 
@@ -85,7 +87,9 @@ jobs:
           New-Item -ItemType Directory -Path "dist/$package" | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/bkpo.exe" "dist/$package/"
           Copy-Item README.md,CHANGELOG.md,LICENSE-APACHE,LICENSE-MIT "dist/$package/"
-          Copy-Item docs,examples,deploy -Destination "dist/$package/" -Recurse
+          Copy-Item examples,deploy -Destination "dist/$package/" -Recurse
+          New-Item -ItemType Directory -Path "dist/$package/docs" | Out-Null
+          Copy-Item docs/src/content/docs/*.md -Destination "dist/$package/docs/"
           Compress-Archive -Path "dist/$package" -DestinationPath "dist/$package.zip"
           Remove-Item "dist/$package" -Recurse -Force
 

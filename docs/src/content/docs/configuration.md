@@ -1,4 +1,7 @@
-# Riferimento configurazione
+---
+title: Riferimento configurazione
+description: Schema completo del file YAML di Backuppo — destinazioni, sorgenti, job e notifier.
+---
 
 La configurazione è YAML. I nomi sotto `destinations`, `notifiers` e `jobs`
 sono identificatori scelti dall'utente. `bkpo check --config FILE` controlla

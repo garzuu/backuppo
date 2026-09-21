@@ -23,9 +23,9 @@ bkpo run --config config.yaml --job home-documents
 bkpo verify --config config.yaml --job home-documents
 ```
 
-Per l'installazione completa vedi il [quickstart](docs/quickstart.md). Sono
-disponibili anche il [riferimento della configurazione](docs/configuration.md)
-e la [guida al restore manuale](docs/restore.md).
+Per l'installazione completa vedi il [quickstart](docs/src/content/docs/quickstart.md).
+Sono disponibili anche il [riferimento della configurazione](docs/src/content/docs/configuration.md)
+e la [guida al restore manuale](docs/src/content/docs/restore.md).
 
 ## Comandi principali
 
