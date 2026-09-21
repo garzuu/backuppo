@@ -107,6 +107,7 @@ fn subject_for(event: &JobEvent) -> String {
         JobEvent::Failure { job, .. } => format!("[backuppo] backup FALLITO: {job}"),
         JobEvent::RestoreVerified { job, .. } => format!("[backuppo] restore verificato: {job}"),
         JobEvent::Report { .. } => "[backuppo] report".to_string(),
+        JobEvent::SiteOffline { site, .. } => format!("[backuppo] sito OFFLINE: {site}"),
     }
 }
 

@@ -44,6 +44,7 @@ fn presentation(event: &JobEvent) -> (&'static str, &'static str, &'static str) 
         JobEvent::Success { .. } => ("Backup riuscito", "3", "white_check_mark"),
         JobEvent::RestoreVerified { .. } => ("Restore verificato", "3", "shield"),
         JobEvent::Report { .. } => ("Report Backuppo", "2", "bar_chart"),
+        JobEvent::SiteOffline { .. } => ("Sito offline", "4", "warning"),
     }
 }
 
@@ -101,6 +102,30 @@ mod tests {
             .send(&JobEvent::Failure {
                 job: "documents".to_string(),
                 error: "disk full".to_string(),
+            })
+            .await
+            .expect("ntfy");
+    }
+
+    #[tokio::test]
+    async fn site_offline_is_high_priority_with_its_own_title() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/t"))
+            .and(header("Title", "Sito offline"))
+            .and(header("Priority", "4"))
+            .and(body_string(
+                "sito 'sede-b' offline: nessun heartbeat da oltre 15 minuti",
+            ))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let notifier = NtfyNotifier::new(&server.uri(), "t", None).unwrap();
+        notifier
+            .send(&JobEvent::SiteOffline {
+                site: "sede-b".to_string(),
+                minutes: 15,
             })
             .await
             .expect("ntfy");

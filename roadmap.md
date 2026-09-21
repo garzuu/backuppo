@@ -205,6 +205,8 @@ Nota: il modello `Job` non ha una tabella propria — è il valore distinto
 del campo `job` sulle esecuzioni ricevute (`GET /v1/sites/{id}/jobs`),
 così non serve pre-registrare i nomi dei job lato hub.
 
+Verifica (21/09/2026): due daemon `bkpo --features hub` + hub in locale (stessa macchina, non due macchine): un agent spento con `kill -9` viene segnato offline in ~100 s con notifica; con l'hub spento un backup riesce e l'evento in coda viene consegnato al ritorno dell'hub (backoff 60 s → max 1 h). Da ripetere su due macchine reali.
+
 **Fatto quando:** due agent su macchine diverse mandano stato all'hub, uno viene spento e l'hub lo segna offline e notifica. Con l'hub giù, gli agent continuano a fare backup e rispediscono gli eventi al ritorno.
 
 ## Fase 12 — App Flutter

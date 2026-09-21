@@ -31,12 +31,9 @@ pub async fn run(state: AppState) {
                 site = site.name.as_str(),
                 "sito marcato offline per assenza di heartbeat"
             );
-            let event = JobEvent::Failure {
-                job: site.name.clone(),
-                error: format!(
-                    "nessun heartbeat da oltre {} minuti: sito offline",
-                    state.offline_after_minutes
-                ),
+            let event = JobEvent::SiteOffline {
+                site: site.name.clone(),
+                minutes: state.offline_after_minutes,
             };
             dispatch(&state.notifiers, &state.notify_on_offline, &event).await;
         }

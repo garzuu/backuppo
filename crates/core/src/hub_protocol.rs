@@ -78,6 +78,16 @@ impl From<&JobEvent> for EventPayload {
                 files: None,
                 checksum: None,
             },
+            // Evento generato solo dall'hub: un agent non lo emette mai. Per
+            // completezza viaggia come fallimento del "job" con il nome del sito.
+            JobEvent::SiteOffline { site, .. } => Self {
+                kind: EventKind::Failure,
+                job: Some(site.clone()),
+                detail: Some(event.to_string()),
+                bytes: None,
+                files: None,
+                checksum: None,
+            },
         }
     }
 }
