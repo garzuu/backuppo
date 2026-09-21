@@ -579,6 +579,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn failure_reaches_the_ntfy_topic_with_high_priority() {
+        use wiremock::matchers::{body_string_contains, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/backuppo-test"))
+            .and(header("Priority", "4"))
+            .and(body_string_contains("disco pieno"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let mut state = test_state();
+        let mut notifiers = HashMap::new();
+        notifiers.insert(
+            "push".to_string(),
+            NotifierConfig::Ntfy {
+                url: server.uri(),
+                topic: "backuppo-test".to_string(),
+                token_env: None,
+            },
+        );
+        state.notifiers = Arc::new(notifiers);
+        state.notify_on_failure = Arc::new(vec!["push".to_string()]);
+
+        let customer = state.db.create_customer("Acme").unwrap();
+        let site = state.db.create_site(customer.id, "sede-1").unwrap();
+        let (plaintext, hash) = auth::generate_opaque_token();
+        state.db.create_agent_token(site.id, &hash, 0).unwrap();
+
+        let result = ingest_event(
+            State(state),
+            auth_header(&plaintext),
+            Json(EventPayload {
+                kind: EventKind::Failure,
+                job: Some("documents".to_string()),
+                detail: Some("disco pieno".to_string()),
+                bytes: None,
+                files: None,
+                checksum: None,
+            }),
+        )
+        .await;
+        assert_eq!(result.unwrap(), StatusCode::CREATED);
+        drop(server);
+    }
+
+    #[tokio::test]
     async fn heartbeat_marks_the_authenticated_site_online() {
         let state = test_state();
         let customer = state.db.create_customer("Acme").unwrap();

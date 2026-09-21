@@ -157,7 +157,7 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 ## Fase 8 — Report e osservabilità (locale)
 
 - [x] Report periodico via mail (es. "7 job ok, 1 fallito, ultimo restore test: ieri")
-- [x] Webhook generico (copre Slack, Discord, ntfy)
+- [x] Webhook generico (Slack, Discord). ntfy ha un notifier dedicato (`type: ntfy`, Fase 12): il webhook JSON non è adatto a `POST /topic`
 - [x] Pagina di stato HTML statica generata a ogni run
 - [x] **Storico esecuzioni strutturato** (SQLite locale o JSON): job, esito, durata, byte, errore, esito verifica restore. Serve poi come base per hub e app
 - [x] Log per esecuzione consultabile da CLI (`bkpo runs`, `bkpo logs <id>`)
@@ -197,7 +197,7 @@ Prerequisito: agent stabile, storico strutturato (Fase 8).
 - [x] Token per agent, creazione e revoca singola
 - [x] Login utenti con JWT a scadenza breve + refresh token
 - [x] **Rilevamento offline**: sito senza heartbeat da X minuti → stato `offline` + notifica
-- [x] Notifiche dell'hub (mail/Telegram/webhook, anche verso ntfy) su fallimenti, verifiche fallite, siti offline
+- [x] Notifiche dell'hub (mail/Telegram/webhook/ntfy) su fallimenti, verifiche fallite, siti offline
 - [x] Web UI minimale per test e uso senza app
 - [x] Immagine Docker dell'hub e guida al deploy dietro reverse proxy HTTPS
 
@@ -217,7 +217,7 @@ Prerequisito: API hub `/v1` stabile. **Repo separato** da `backuppo` (vedi "Stru
 - [x] Dettaglio sito → job → esecuzione con log ed errore
 - [x] Stato ultima verifica restore per ogni job
 - [x] Filtri per cliente e ricerca
-- [ ] Notifiche push (Firebase, oppure ntfy/UnifiedPush se self-hosted) — serve un canale lato hub verso i dispositivi
+- [x] Notifiche push via **ntfy** (scelta: self-hostabile, nessun account Firebase/Apple da gestire): notifier `type: ntfy` (agent e hub, priorità alta sui fallimenti) + schermata "Notifiche" nell'app con link di iscrizione e invio di prova. Verificato solo con server mock: da provare con un server ntfy reale e l'app ntfy su un telefono (deep link `ntfy://` non verificato su dispositivo)
 - [ ] Azioni opzionali con permesso dedicato: "esegui ora", "verifica ora" — l'agent non ha ancora un canale di comando in ingresso (gli agent parlano solo in uscita)
 - [x] Gestione siti e token agent (creazione; revoca per ID — l'hub non ha ancora un endpoint per elencare i token)
 

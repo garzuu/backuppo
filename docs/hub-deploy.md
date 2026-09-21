@@ -30,7 +30,7 @@ Copiare `examples/hub-config.yaml` e adattarlo. Campi principali:
 - `offline_after_minutes`: soglia oltre la quale un sito senza heartbeat
   viene marcato offline e notificato.
 - `notifiers` / `notify_on_offline` / `notify_on_failure`: stesso formato
-  dei notifier dell'agent (telegram/smtp/webhook), riusati per gli alert
+  dei notifier dell'agent (telegram/smtp/webhook/ntfy), riusati per gli alert
   dell'hub. `notify_on_offline` scatta quando un sito passa offline,
   `notify_on_failure` non appena un agent riporta un job o una verifica
   restore falliti su `/v1/events` (indipendentemente dai notifier che

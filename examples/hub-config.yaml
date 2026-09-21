@@ -16,12 +16,18 @@ refresh_token_days: 30
 offline_after_minutes: 15
 
 # Notifier riusati per gli alert dell'hub stesso (stesso formato della
-# config agent: telegram, smtp, webhook).
+# config agent: telegram, smtp, webhook, ntfy).
 notifiers:
   ops-telegram:
     type: telegram
     token_env: TELEGRAM_BOT_TOKEN
     chat_id: "123456789"
+
+# Push sul telefono: l'app Backuppo (o l'app ntfy) si iscrive allo stesso topic.
+  # ops-ntfy:
+  #   type: ntfy
+  #   url: https://ntfy.sh
+  #   topic: backuppo-cambiami-con-un-valore-casuale
 
 notify_on_offline: [ops-telegram]
 # Notifica un job/verifica restore falliti non appena un agent li riporta.

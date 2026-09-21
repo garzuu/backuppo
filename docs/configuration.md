@@ -198,7 +198,28 @@ notifiers:
 ```
 
 Il webhook invia JSON con `event`, `job`, `text`, `content` e `message`, più i
-metadati dell'archivio quando disponibili.
+metadati dell'archivio quando disponibili. Adatto a Slack e Discord; **per ntfy
+usa il tipo `ntfy`** (sotto): ntfy tratta il corpo di una `POST /topic` come
+testo del messaggio, non come JSON.
+
+### ntfy (push sul telefono)
+
+```yaml
+notifiers:
+  ops-ntfy:
+    type: ntfy
+    url: https://ntfy.sh          # o la tua istanza self-hosted
+    topic: backuppo-a1b2c3d4e5    # scegli un nome non indovinabile
+    token_env: NTFY_TOKEN         # opzionale: solo per topic protetti
+```
+
+Pubblica su `<url>/<topic>` con titolo, priorità e tag: i fallimenti hanno
+priorità alta (4), successi e verifiche normale (3), i report bassa (2). Su
+un topic pubblico chiunque conosca il nome può leggere e scrivere: usa un
+nome lungo e casuale, oppure un'istanza self-hosted con controllo accessi e
+`token_env`. I messaggi contengono nome del job ed errore, mai il contenuto
+dei backup. Per riceverli installa l'app ntfy (o l'app Backuppo, che apre
+l'iscrizione al topic) e iscriviti allo stesso topic.
 
 ### Hub multi-sito (opt-in)
 

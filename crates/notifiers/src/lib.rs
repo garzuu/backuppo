@@ -2,12 +2,14 @@
 
 #[cfg(feature = "hub")]
 pub mod hub;
+mod ntfy;
 mod smtp;
 mod telegram;
 mod webhook;
 
 #[cfg(feature = "hub")]
 pub use hub::HubNotifier;
+pub use ntfy::NtfyNotifier;
 pub use smtp::SmtpNotifier;
 pub use telegram::TelegramNotifier;
 pub use webhook::WebhookNotifier;
@@ -38,6 +40,15 @@ pub fn build(config: &NotifierConfig) -> Result<Box<dyn Notifier>, BackupError> 
             to,
         )?)),
         NotifierConfig::Webhook { url } => Ok(Box::new(WebhookNotifier::new(url)?)),
+        NotifierConfig::Ntfy {
+            url,
+            topic,
+            token_env,
+        } => Ok(Box::new(NtfyNotifier::new(
+            url,
+            topic,
+            token_env.as_deref(),
+        )?)),
         #[cfg(feature = "hub")]
         NotifierConfig::Hub {
             url,

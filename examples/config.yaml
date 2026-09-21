@@ -69,6 +69,14 @@ notifiers:
     type: webhook
     url: https://hooks.example.com/backuppo
 
+  # Push sul telefono (app ntfy o app Backuppo). Il topic funge da
+  # "password" se l'istanza è pubblica: scegline uno lungo e casuale.
+  # ops-ntfy:
+  #   type: ntfy
+  #   url: https://ntfy.sh
+  #   topic: backuppo-cambiami-con-un-valore-casuale
+  #   token_env: NTFY_TOKEN   # opzionale, per topic protetti
+
   # Richiede il binario compilato con la feature Cargo `hub` (Fase 11,
   # opt-in). Manda solo metadati (esiti, durate, errori) all'hub, mai
   # contenuto dei backup né segreti.
