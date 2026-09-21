@@ -16,7 +16,7 @@ use api::AppState;
 use db::{Db, Role};
 
 #[derive(Parser)]
-#[command(name = "backuppo-hub", about = "Hub multi-sito per Backuppo")]
+#[command(name = "backuppo-hub", version, about = "Hub multi-sito per Backuppo")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
