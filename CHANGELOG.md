@@ -8,6 +8,7 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 - API e Web UI locale con stato, storico e avvio manuale dei job.
 - Destinazioni Google Drive, Dropbox e OneDrive tramite OAuth.
 - Sorgenti per immagini disco e VM libvirt spente.
+- Log del daemon: senza `RUST_LOG` non veniva scritto nulla (solo errori). Ora `bkpo daemon`/`serve` loggano a `info`, su stderr e senza colori ANSI quando non è un terminale; le unit systemd usano `RUST_LOG=info`.
 
 ## [0.1.0] - 2026-09-20
 

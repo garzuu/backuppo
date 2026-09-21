@@ -8,7 +8,7 @@ Type=simple
 User=backuppo
 Group=backuppo
 EnvironmentFile=-/etc/backuppo/backuppo.env
-Environment=RUST_LOG=backuppo=info
+Environment=RUST_LOG=info
 ExecStart=/usr/local/bin/bkpo daemon --config /etc/backuppo/config.yaml
 Restart=on-failure
 RestartSec=10s

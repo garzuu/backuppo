@@ -82,13 +82,37 @@ enum Command {
     },
 }
 
+/// Configura i log. Senza `RUST_LOG` i servizi a lunga durata (`daemon`,
+/// `serve`) loggano a livello `info`, altrimenti restano invisibili; i comandi
+/// one-shot solo da `warn`, per non riempire l'output di chi li lancia a mano.
+/// I log vanno su stderr (stdout è per i risultati) e i colori ANSI solo se
+/// stderr è un terminale, così file di log e journald restano leggibili.
+fn init_logging(command: &Command) {
+    use std::io::IsTerminal;
+
+    // `info` solo per i crate del workspace: le dipendenze restano a `warn`.
+    const SERVICE_FILTER: &str =
+        "warn,bkpo=info,backuppo=info,backuppo_core=info,backuppo_engine=info,\
+        backuppo_sources=info,backuppo_destinations=info,backuppo_notifiers=info";
+    let default_level = match command {
+        Command::Daemon { .. } | Command::Serve { .. } => SERVICE_FILTER,
+        #[cfg(windows)]
+        Command::Service { .. } => SERVICE_FILTER,
+        _ => "warn",
+    };
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
-
     let cli = Cli::parse();
+    init_logging(&cli.command);
     match cli.command {
         Command::Check { config } => check(&config),
         Command::Run { config, job } => run(&config, &job).await,
