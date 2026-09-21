@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use backuppo_core::error::BackupError;
-use backuppo_core::hub_protocol::EventPayload;
+use backuppo_core::hub_protocol::{CommandResult, EventPayload, PendingCommand};
 use backuppo_core::model::JobEvent;
 use backuppo_core::secrets::resolve_env;
 use backuppo_core::traits::Notifier;
@@ -100,6 +100,58 @@ pub async fn send_heartbeat(url: &str, token_env: &str) -> Result<(), BackupErro
     if !response.status().is_success() {
         return Err(BackupError::Other(format!(
             "l'hub ha risposto {} all'heartbeat",
+            response.status()
+        )));
+    }
+    Ok(())
+}
+
+/// Ritira dall'hub i comandi "esegui ora"/"verifica ora" in attesa per questo
+/// sito. Ogni comando viene consegnato una sola volta.
+pub async fn fetch_commands(
+    url: &str,
+    token_env: &str,
+) -> Result<Vec<PendingCommand>, BackupError> {
+    let token = resolve_env("token_env", token_env)?;
+    let response = Client::new()
+        .get(format!("{}/v1/commands/pending", url.trim_end_matches('/')))
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| BackupError::Other(format!("errore di rete verso l'hub: {e}")))?;
+    if !response.status().is_success() {
+        return Err(BackupError::Other(format!(
+            "l'hub ha risposto {} al ritiro dei comandi",
+            response.status()
+        )));
+    }
+    response
+        .json()
+        .await
+        .map_err(|e| BackupError::Other(format!("risposta comandi dell'hub non valida: {e}")))
+}
+
+/// Riporta all'hub l'esito di un comando ritirato.
+pub async fn report_command(
+    url: &str,
+    token_env: &str,
+    id: i64,
+    result: &CommandResult,
+) -> Result<(), BackupError> {
+    let token = resolve_env("token_env", token_env)?;
+    let response = Client::new()
+        .post(format!(
+            "{}/v1/commands/{id}/result",
+            url.trim_end_matches('/')
+        ))
+        .bearer_auth(token)
+        .json(result)
+        .send()
+        .await
+        .map_err(|e| BackupError::Other(format!("errore di rete verso l'hub: {e}")))?;
+    if !response.status().is_success() {
+        return Err(BackupError::Other(format!(
+            "l'hub ha risposto {} all'esito del comando {id}",
             response.status()
         )));
     }
@@ -338,5 +390,68 @@ mod tests {
         assert_eq!(backoff_seconds(1), 60);
         assert_eq!(backoff_seconds(2), 120);
         assert_eq!(backoff_seconds(10), 3600);
+    }
+
+    #[tokio::test]
+    async fn fetches_pending_commands_and_reports_the_result() {
+        use backuppo_core::hub_protocol::CommandKind;
+        std::env::set_var("BKPO_TEST_HUB_CMD_TOKEN", "tk");
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/commands/pending"))
+            .and(header("authorization", "Bearer tk"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"id": 4, "kind": "verify", "job": "documents"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/commands/4/result"))
+            .and(wiremock::matchers::body_json(
+                serde_json::json!({"ok": true, "detail": "1 file"}),
+            ))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let commands = fetch_commands(&server.uri(), "BKPO_TEST_HUB_CMD_TOKEN")
+            .await
+            .unwrap();
+        assert_eq!(
+            commands,
+            vec![PendingCommand {
+                id: 4,
+                kind: CommandKind::Verify,
+                job: "documents".to_string()
+            }]
+        );
+        report_command(
+            &server.uri(),
+            "BKPO_TEST_HUB_CMD_TOKEN",
+            4,
+            &CommandResult {
+                ok: true,
+                detail: Some("1 file".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn command_http_errors_are_reported() {
+        std::env::set_var("BKPO_TEST_HUB_CMD_TOKEN2", "tk");
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        let error = fetch_commands(&server.uri(), "BKPO_TEST_HUB_CMD_TOKEN2")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("401"), "{error}");
     }
 }

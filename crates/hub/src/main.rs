@@ -99,8 +99,9 @@ async fn serve(config_path: &Path) -> Result<()> {
 fn create_user(config_path: &Path, username: &str, password_env: &str, role: &str) -> Result<()> {
     let config = config::load(config_path)?;
     let db = Db::open(&config.database_path)?;
-    let role = Role::parse(role)
-        .with_context(|| format!("ruolo non valido '{role}': usare 'admin' o 'read_only'"))?;
+    let role = Role::parse(role).with_context(|| {
+        format!("ruolo non valido '{role}': usare 'admin', 'operator' o 'read_only'")
+    })?;
     let password = std::env::var(password_env)
         .with_context(|| format!("variabile d'ambiente '{password_env}' non impostata"))?;
     let hash = auth::hash_password(&password)?;

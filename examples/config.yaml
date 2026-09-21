@@ -86,6 +86,9 @@ notifiers:
   #   token_env: HUB_TOKEN
   #   heartbeat_seconds: 60
   #   queue_path: /var/lib/backuppo/hub-queue.sqlite
+  #   # Opt-in: ritira dall'hub "esegui ora"/"verifica ora" (solo job di questa config).
+  #   remote_commands: false
+  #   command_poll_seconds: 15
 
 observability:
   history_path: /var/lib/backuppo/history.sqlite

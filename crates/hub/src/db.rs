@@ -12,6 +12,9 @@ pub struct Db {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Admin,
+    /// Sola lettura + può chiedere agli agent "esegui ora"/"verifica ora",
+    /// ma non gestire clienti, siti e token.
+    Operator,
     ReadOnly,
 }
 
@@ -19,6 +22,7 @@ impl Role {
     pub fn as_str(self) -> &'static str {
         match self {
             Role::Admin => "admin",
+            Role::Operator => "operator",
             Role::ReadOnly => "read_only",
         }
     }
@@ -26,10 +30,33 @@ impl Role {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "admin" => Some(Role::Admin),
+            "operator" => Some(Role::Operator),
             "read_only" => Some(Role::ReadOnly),
             _ => None,
         }
     }
+}
+
+/// Un comando non ritirato dall'agent entro questo tempo scade: un backup
+/// richiesto da un utente non deve partire ore dopo perché l'agent era offline.
+pub const PENDING_TTL_SECONDS: i64 = 10 * 60;
+/// Un comando ritirato ma senza esito oltre questo tempo (agent morto a metà)
+/// viene chiuso come fallito, così non blocca per sempre nuove richieste.
+pub const DELIVERED_TIMEOUT_SECONDS: i64 = 24 * 60 * 60;
+
+/// Stato: `pending` → `delivered` → `done` | `failed`; oppure `expired`.
+#[derive(Debug, Clone, Serialize)]
+pub struct Command {
+    pub id: i64,
+    pub site_id: i64,
+    pub kind: String,
+    pub job: String,
+    pub status: String,
+    pub created_by: String,
+    pub created_at: i64,
+    pub delivered_at: Option<i64>,
+    pub finished_at: Option<i64>,
+    pub detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -143,6 +170,19 @@ impl Db {
                     checksum TEXT,
                     received_at INTEGER NOT NULL
                  );
+                 CREATE TABLE IF NOT EXISTS commands (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    site_id INTEGER NOT NULL REFERENCES sites(id),
+                    kind TEXT NOT NULL,
+                    job TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_by TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    delivered_at INTEGER,
+                    finished_at INTEGER,
+                    detail TEXT
+                 );
+                 CREATE INDEX IF NOT EXISTS commands_site_id ON commands(site_id, id DESC);
                  CREATE INDEX IF NOT EXISTS executions_site_id ON executions(site_id, id DESC);
                  CREATE INDEX IF NOT EXISTS agent_tokens_hash ON agent_tokens(token_hash);
                  CREATE INDEX IF NOT EXISTS refresh_tokens_hash ON refresh_tokens(token_hash);",
@@ -249,6 +289,129 @@ impl Db {
         Ok(())
     }
 
+    // --- comandi -------------------------------------------------------------
+
+    /// Chiude i comandi scaduti (vedi le costanti sopra).
+    fn expire_commands(&self, connection: &Connection, now: i64) -> Result<()> {
+        connection.execute(
+            "UPDATE commands SET status = 'expired', finished_at = ?1,
+                    detail = 'non ritirato dall''agent in tempo'
+             WHERE status = 'pending' AND created_at < ?2",
+            params![now, now - PENDING_TTL_SECONDS],
+        )?;
+        connection.execute(
+            "UPDATE commands SET status = 'failed', finished_at = ?1,
+                    detail = 'nessun esito ricevuto dall''agent'
+             WHERE status = 'delivered' AND delivered_at < ?2",
+            params![now, now - DELIVERED_TIMEOUT_SECONDS],
+        )?;
+        Ok(())
+    }
+
+    /// Crea un comando. `None` se per lo stesso sito/azione/job ce n'è già
+    /// uno in attesa o in esecuzione (evita doppi avvii da doppio tap).
+    pub fn create_command(
+        &self,
+        site_id: i64,
+        kind: &str,
+        job: &str,
+        created_by: &str,
+        now: i64,
+    ) -> Result<Option<Command>> {
+        let connection = self.connect()?;
+        self.expire_commands(&connection, now)?;
+        let active: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM commands
+             WHERE site_id = ?1 AND kind = ?2 AND job = ?3
+               AND status IN ('pending', 'delivered')",
+            params![site_id, kind, job],
+            |row| row.get(0),
+        )?;
+        if active > 0 {
+            return Ok(None);
+        }
+        connection.execute(
+            "INSERT INTO commands (site_id, kind, job, created_by, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![site_id, kind, job, created_by, now],
+        )?;
+        let id = connection.last_insert_rowid();
+        Ok(Some(Command {
+            id,
+            site_id,
+            kind: kind.to_string(),
+            job: job.to_string(),
+            status: "pending".to_string(),
+            created_by: created_by.to_string(),
+            created_at: now,
+            delivered_at: None,
+            finished_at: None,
+            detail: None,
+        }))
+    }
+
+    /// Ritira i comandi in attesa del sito e li marca `delivered`, in una
+    /// transazione: due poll concorrenti non ricevono mai lo stesso comando.
+    pub fn claim_commands(&self, site_id: i64, now: i64) -> Result<Vec<Command>> {
+        let mut connection = self.connect()?;
+        self.expire_commands(&connection, now)?;
+        let tx = connection.transaction()?;
+        let claimed = {
+            let mut statement = tx.prepare(
+                "SELECT id, site_id, kind, job, status, created_by, created_at,
+                        delivered_at, finished_at, detail
+                 FROM commands WHERE site_id = ?1 AND status = 'pending' ORDER BY id ASC",
+            )?;
+            let rows = statement.query_map([site_id], command_from_row)?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+        for command in &claimed {
+            tx.execute(
+                "UPDATE commands SET status = 'delivered', delivered_at = ?2 WHERE id = ?1",
+                params![command.id, now],
+            )?;
+        }
+        tx.commit()?;
+        Ok(claimed
+            .into_iter()
+            .map(|mut command| {
+                command.status = "delivered".to_string();
+                command.delivered_at = Some(now);
+                command
+            })
+            .collect())
+    }
+
+    /// Registra l'esito. `false` se il comando non esiste, non è di questo
+    /// sito o non è in stato `delivered` (es. esito già riportato).
+    pub fn finish_command(
+        &self,
+        site_id: i64,
+        id: i64,
+        ok: bool,
+        detail: Option<&str>,
+        now: i64,
+    ) -> Result<bool> {
+        let changed = self.connect()?.execute(
+            "UPDATE commands SET status = ?3, finished_at = ?4, detail = ?5
+             WHERE id = ?1 AND site_id = ?2 AND status = 'delivered'",
+            params![id, site_id, if ok { "done" } else { "failed" }, now, detail],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn list_commands(&self, site_id: i64, limit: i64, now: i64) -> Result<Vec<Command>> {
+        let connection = self.connect()?;
+        self.expire_commands(&connection, now)?;
+        let mut statement = connection.prepare(
+            "SELECT id, site_id, kind, job, status, created_by, created_at,
+                    delivered_at, finished_at, detail
+             FROM commands WHERE site_id = ?1 ORDER BY id DESC LIMIT ?2",
+        )?;
+        let rows = statement.query_map(params![site_id, limit], command_from_row)?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
     // --- agent tokens ------------------------------------------------------
 
     pub fn create_agent_token(&self, site_id: i64, token_hash: &str, now: i64) -> Result<i64> {
@@ -295,6 +458,15 @@ impl Db {
             params![username, password_hash, role.as_str()],
         )?;
         Ok(connection.last_insert_rowid())
+    }
+
+    pub fn username_by_id(&self, id: i64) -> Result<Option<String>> {
+        self.connect()?
+            .query_row("SELECT username FROM users WHERE id = ?1", [id], |row| {
+                row.get(0)
+            })
+            .optional()
+            .context("lettura utente")
     }
 
     pub fn user_by_username(&self, username: &str) -> Result<Option<(i64, String, Role)>> {
@@ -430,6 +602,21 @@ fn execution_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Execution> {
     })
 }
 
+fn command_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Command> {
+    Ok(Command {
+        id: row.get(0)?,
+        site_id: row.get(1)?,
+        kind: row.get(2)?,
+        job: row.get(3)?,
+        status: row.get(4)?,
+        created_by: row.get(5)?,
+        created_at: row.get(6)?,
+        delivered_at: row.get(7)?,
+        finished_at: row.get(8)?,
+        detail: row.get(9)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -551,5 +738,120 @@ mod tests {
             db.get_site(site.id).unwrap().unwrap().last_event_at,
             Some(42)
         );
+    }
+
+    fn db_with_site() -> (Db, i64) {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Db::open(temp.path().join("hub.sqlite")).unwrap();
+        std::mem::forget(temp);
+        let customer = db.create_customer("Acme").unwrap();
+        let site = db.create_site(customer.id, "sede-1").unwrap();
+        (db, site.id)
+    }
+
+    #[test]
+    fn command_lifecycle_pending_delivered_done() {
+        let (db, site) = db_with_site();
+        let created = db
+            .create_command(site, "run", "documents", "admin", 1000)
+            .unwrap()
+            .expect("creato");
+        assert_eq!(created.status, "pending");
+
+        let claimed = db.claim_commands(site, 1005).unwrap();
+        assert_eq!(claimed.len(), 1);
+        assert_eq!(claimed[0].status, "delivered");
+        // Un secondo poll non riceve più lo stesso comando.
+        assert!(db.claim_commands(site, 1006).unwrap().is_empty());
+
+        assert!(db
+            .finish_command(site, created.id, true, Some("1 file"), 1010)
+            .unwrap());
+        // L'esito si registra una volta sola.
+        assert!(!db
+            .finish_command(site, created.id, true, None, 1011)
+            .unwrap());
+
+        let listed = db.list_commands(site, 10, 1012).unwrap();
+        assert_eq!(listed[0].status, "done");
+        assert_eq!(listed[0].detail.as_deref(), Some("1 file"));
+        assert_eq!(listed[0].created_by, "admin");
+    }
+
+    #[test]
+    fn duplicate_active_command_is_refused_until_finished() {
+        let (db, site) = db_with_site();
+        let first = db
+            .create_command(site, "run", "documents", "admin", 1000)
+            .unwrap()
+            .unwrap();
+        assert!(db
+            .create_command(site, "run", "documents", "admin", 1001)
+            .unwrap()
+            .is_none());
+        // Azione o job diversi non sono duplicati.
+        assert!(db
+            .create_command(site, "verify", "documents", "admin", 1001)
+            .unwrap()
+            .is_some());
+        assert!(db
+            .create_command(site, "run", "database", "admin", 1001)
+            .unwrap()
+            .is_some());
+
+        db.claim_commands(site, 1002).unwrap();
+        db.finish_command(site, first.id, false, Some("boom"), 1003)
+            .unwrap();
+        assert!(db
+            .create_command(site, "run", "documents", "admin", 1004)
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn stale_pending_command_expires_and_is_never_delivered() {
+        let (db, site) = db_with_site();
+        db.create_command(site, "run", "documents", "admin", 1000)
+            .unwrap();
+        let late = 1000 + PENDING_TTL_SECONDS + 1;
+        assert!(db.claim_commands(site, late).unwrap().is_empty());
+        assert_eq!(
+            db.list_commands(site, 10, late).unwrap()[0].status,
+            "expired"
+        );
+    }
+
+    #[test]
+    fn delivered_command_without_result_eventually_fails() {
+        let (db, site) = db_with_site();
+        db.create_command(site, "run", "documents", "admin", 1000)
+            .unwrap();
+        db.claim_commands(site, 1001).unwrap();
+        let late = 1001 + DELIVERED_TIMEOUT_SECONDS + 1;
+        let listed = db.list_commands(site, 10, late).unwrap();
+        assert_eq!(listed[0].status, "failed");
+        // Non blocca una nuova richiesta.
+        assert!(db
+            .create_command(site, "run", "documents", "admin", late)
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn commands_are_scoped_to_their_site() {
+        let (db, site) = db_with_site();
+        let other = db
+            .create_site(db.list_customers().unwrap()[0].id, "sede-2")
+            .unwrap();
+        let cmd = db
+            .create_command(site, "run", "documents", "admin", 1000)
+            .unwrap()
+            .unwrap();
+        assert!(db.claim_commands(other.id, 1001).unwrap().is_empty());
+        db.claim_commands(site, 1001).unwrap();
+        // Un altro sito non può chiudere un comando non suo.
+        assert!(!db
+            .finish_command(other.id, cmd.id, true, None, 1002)
+            .unwrap());
     }
 }

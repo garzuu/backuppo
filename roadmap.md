@@ -38,7 +38,7 @@ Ordine di sviluppo: prima l'agent fino a `v0.1.0` stabile, poi l'hub, poi l'app.
 - **Hub come binario separato** (`crates/hub`), con i soli tipi condivisi (eventi, modelli) in `core`. Il client dell'hub nell'agent sta dietro il Cargo feature flag `hub`.
 - Gli agent parlano con l'hub solo in **uscita** (push), così funzionano dietro NAT/firewall. Inviano **solo metadati** (esiti, durate, errori), mai contenuto dei backup né segreti.
 - API dell'hub **versionata** (`/v1/...`) fin dall'inizio.
-- Modello dati hub: `Organizzazione/Cliente → Sito → Job → Esecuzione`, con ruoli (admin, sola lettura).
+- Modello dati hub: `Organizzazione/Cliente → Sito → Job → Esecuzione`, con ruoli (admin, operator, sola lettura). L'`operator` può chiedere "esegui ora"/"verifica ora" agli agent che hanno attivato `remote_commands`.
 - App: **Flutter** (Riverpod, `dio`, `go_router`, `drift`, `fl_chart`).
 
 ## Struttura del workspace
@@ -220,7 +220,7 @@ Prerequisito: API hub `/v1` stabile. **Repo separato** da `backuppo` (vedi "Stru
 - [x] Stato ultima verifica restore per ogni job
 - [x] Filtri per cliente e ricerca
 - [x] Notifiche push via **ntfy** (scelta: self-hostabile, nessun account Firebase/Apple da gestire): notifier `type: ntfy` (agent e hub, priorità alta sui fallimenti) + schermata "Notifiche" nell'app con link di iscrizione e invio di prova. Verificato solo con server mock: da provare con un server ntfy reale e l'app ntfy su un telefono (deep link `ntfy://` non verificato su dispositivo)
-- [ ] Azioni opzionali con permesso dedicato: "esegui ora", "verifica ora" — l'agent non ha ancora un canale di comando in ingresso (gli agent parlano solo in uscita)
+- [x] Azioni opzionali con permesso dedicato: "esegui ora", "verifica ora". Canale di comando **a polling in uscita** (l'agent ritira dall'hub, l'hub non si connette mai all'agent): opt-in `remote_commands` sull'agent, ruolo hub `operator`, comandi che scadono dopo 10 min, solo job presenti nella config dell'agent. Verificato end-to-end (hub + agent + app macOS)
 - [x] Gestione siti e token agent (creazione; revoca per ID — l'hub non ha ancora un endpoint per elencare i token)
 
 Nota: il semaforo è calcolato dall'app sugli eventi (l'hub non espone uno stato aggregato per sito oltre a online/offline). `POST /v1/sites/{id}/tokens` ora restituisce anche `token_id` (campo aggiunto, compatibile con `/v1`).
