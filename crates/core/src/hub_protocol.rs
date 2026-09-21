@@ -91,3 +91,66 @@ impl From<&JobEvent> for EventPayload {
         }
     }
 }
+
+/// Azione che l'hub può chiedere a un agent. Solo queste due: l'agent non
+/// esegue mai comandi arbitrari, solo job già definiti nella sua config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandKind {
+    /// Esegue il backup del job (con retention se riesce).
+    Run,
+    /// Verifica il restore dell'ultimo backup del job.
+    Verify,
+}
+
+impl CommandKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CommandKind::Run => "run",
+            CommandKind::Verify => "verify",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "run" => Some(CommandKind::Run),
+            "verify" => Some(CommandKind::Verify),
+            _ => None,
+        }
+    }
+}
+
+/// Elemento di `GET /v1/commands/pending`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingCommand {
+    pub id: i64,
+    pub kind: CommandKind,
+    pub job: String,
+}
+
+/// Corpo di `POST /v1/commands/{id}/result`: l'esito riportato dall'agent.
+/// Il dettaglio dell'esecuzione arriva comunque come evento normale.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommandResult {
+    pub ok: bool,
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_kind_wire_format_is_snake_case() {
+        let command = PendingCommand {
+            id: 7,
+            kind: CommandKind::Verify,
+            job: "documents".to_string(),
+        };
+        let json = serde_json::to_string(&command).unwrap();
+        assert_eq!(json, r#"{"id":7,"kind":"verify","job":"documents"}"#);
+        assert_eq!(CommandKind::parse("run"), Some(CommandKind::Run));
+        assert_eq!(CommandKind::parse("rm -rf"), None);
+    }
+}

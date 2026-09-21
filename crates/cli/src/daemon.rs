@@ -31,7 +31,7 @@ where
     );
     let api_handle = crate::api::spawn(Arc::clone(&config), Arc::clone(&locks)).await?;
     #[cfg(feature = "hub")]
-    let hub_handle = spawn_hub_tasks(&config);
+    let hub_handles = spawn_hub_tasks(Arc::clone(&config), Arc::clone(&locks));
 
     let scheduler = JobScheduler::new()
         .await
@@ -107,7 +107,7 @@ where
         handle.abort();
     }
     #[cfg(feature = "hub")]
-    if let Some(handle) = hub_handle {
+    for handle in hub_handles {
         handle.abort();
     }
     info!("shutdown completato");
@@ -115,15 +115,20 @@ where
     Ok(())
 }
 
+/// Lock per job condivisi tra scheduler, API locale e comandi remoti.
+#[cfg(feature = "hub")]
+type Locks = Arc<HashMap<String, Arc<Mutex<()>>>>;
+
 /// Avvia, se in config è presente un notifier di tipo `hub`, un task che
 /// manda heartbeat periodici e ritenta l'invio degli eventi rimasti in coda
-/// locale. Nessun errore verso l'hub deve mai arrestare il daemon o far
-/// fallire un job: viene solo loggato.
+/// locale e, solo con `remote_commands: true`, un secondo task che ritira ed
+/// esegue i comandi "esegui ora"/"verifica ora". Nessun errore verso l'hub
+/// deve mai arrestare il daemon o far fallire un job: viene solo loggato.
 #[cfg(feature = "hub")]
-fn spawn_hub_tasks(config: &Config) -> Option<tokio::task::JoinHandle<()>> {
+fn spawn_hub_tasks(config: Arc<Config>, locks: Locks) -> Vec<tokio::task::JoinHandle<()>> {
     use backuppo_core::config::NotifierConfig;
 
-    let (url, token_env, heartbeat_seconds, queue_path) =
+    let Some((url, token_env, heartbeat_seconds, queue_path, remote_commands, poll_seconds)) =
         config
             .notifiers
             .values()
@@ -133,16 +138,26 @@ fn spawn_hub_tasks(config: &Config) -> Option<tokio::task::JoinHandle<()>> {
                     token_env,
                     heartbeat_seconds,
                     queue_path,
+                    remote_commands,
+                    command_poll_seconds,
                 } => Some((
                     url.clone(),
                     token_env.clone(),
                     *heartbeat_seconds,
                     queue_path.clone(),
+                    *remote_commands,
+                    *command_poll_seconds,
                 )),
                 _ => None,
-            })?;
+            })
+    else {
+        return Vec::new();
+    };
 
-    Some(tokio::spawn(async move {
+    let mut handles = Vec::new();
+    let (heartbeat_url, heartbeat_token_env) = (url.clone(), token_env.clone());
+    handles.push(tokio::spawn(async move {
+        let (url, token_env) = (heartbeat_url, heartbeat_token_env);
         let mut interval =
             tokio::time::interval(std::time::Duration::from_secs(heartbeat_seconds.max(1)));
         loop {
@@ -156,7 +171,93 @@ fn spawn_hub_tasks(config: &Config) -> Option<tokio::task::JoinHandle<()>> {
                 Err(error) => warn!(%error, "flush della coda eventi hub fallito"),
             }
         }
-    }))
+    }));
+
+    if remote_commands {
+        info!("comandi remoti dall'hub abilitati: solo job presenti in questa config");
+        handles.push(tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(poll_seconds.max(1)));
+            loop {
+                interval.tick().await;
+                let commands = match backuppo_notifiers::hub::fetch_commands(&url, &token_env).await
+                {
+                    Ok(commands) => commands,
+                    Err(error) => {
+                        warn!(%error, "ritiro comandi dall'hub fallito");
+                        continue;
+                    }
+                };
+                for command in commands {
+                    // Un comando lungo (un backup) non deve bloccare il poll.
+                    let (config, locks) = (Arc::clone(&config), Arc::clone(&locks));
+                    let (url, token_env) = (url.clone(), token_env.clone());
+                    tokio::spawn(async move {
+                        info!(
+                            id = command.id,
+                            job = command.job.as_str(),
+                            kind = command.kind.as_str(),
+                            "comando remoto ricevuto dall'hub"
+                        );
+                        let result = execute_command(&command, &config, &locks).await;
+                        if let Err(error) = backuppo_notifiers::hub::report_command(
+                            &url, &token_env, command.id, &result,
+                        )
+                        .await
+                        {
+                            warn!(id = command.id, %error, "invio esito comando all'hub fallito");
+                        }
+                    });
+                }
+            }
+        }));
+    }
+    handles
+}
+
+/// Esegue un comando remoto. Sicurezza: il comando può solo nominare un job
+/// già definito nella config locale e scegliere tra le due azioni note
+/// (`run`, `verify`); il lock per job evita esecuzioni sovrapposte.
+#[cfg(feature = "hub")]
+async fn execute_command(
+    command: &backuppo_core::hub_protocol::PendingCommand,
+    config: &Config,
+    locks: &Locks,
+) -> backuppo_core::hub_protocol::CommandResult {
+    use backuppo_core::hub_protocol::{CommandKind, CommandResult};
+
+    let failed = |detail: String| CommandResult {
+        ok: false,
+        detail: Some(detail),
+    };
+    let job = command.job.as_str();
+    let Some(lock) = locks.get(job) else {
+        return failed(format!(
+            "job '{job}' non presente nella config di questo agent"
+        ));
+    };
+    let Ok(_guard) = lock.try_lock() else {
+        return failed(format!("il job '{job}' è già in esecuzione"));
+    };
+    match command.kind {
+        CommandKind::Run => match backuppo_engine::run_and_retain(job, config).await {
+            Ok(artifact) => CommandResult {
+                ok: true,
+                detail: Some(format!(
+                    "backup riuscito: {} file, {} byte",
+                    artifact.files, artifact.bytes
+                )),
+            },
+            Err(error) => failed(error.to_string()),
+        },
+        CommandKind::Verify => match backuppo_engine::verify_job(job, config).await {
+            Ok(event) => CommandResult {
+                ok: true,
+                detail: Some(event.to_string()),
+            },
+            Err(error) => failed(error.to_string()),
+        },
+    }
 }
 
 async fn run_one_tick(
@@ -302,5 +403,87 @@ mod tests {
             1,
             "una volta libero il lock il job deve poter partire"
         );
+    }
+
+    #[cfg(feature = "hub")]
+    fn locks_for(config: &Config) -> Locks {
+        Arc::new(
+            config
+                .jobs
+                .keys()
+                .map(|name| (name.clone(), Arc::new(Mutex::new(()))))
+                .collect(),
+        )
+    }
+
+    #[cfg(feature = "hub")]
+    fn command(
+        kind: backuppo_core::hub_protocol::CommandKind,
+        job: &str,
+    ) -> backuppo_core::hub_protocol::PendingCommand {
+        backuppo_core::hub_protocol::PendingCommand {
+            id: 1,
+            kind,
+            job: job.to_string(),
+        }
+    }
+
+    #[cfg(feature = "hub")]
+    #[tokio::test]
+    async fn remote_run_and_verify_execute_a_configured_job() {
+        use backuppo_core::hub_protocol::CommandKind;
+        let temp = tempfile::tempdir().unwrap();
+        let (src, dst) = (temp.path().join("src"), temp.path().join("dst"));
+        write_file(&src.join("a.txt"), "ciao");
+        let config = build_config(&src, &dst);
+        let locks = locks_for(&config);
+
+        let run = execute_command(&command(CommandKind::Run, "documents"), &config, &locks).await;
+        assert!(run.ok, "{run:?}");
+        assert!(run.detail.unwrap().contains("1 file"));
+        assert!(
+            std::fs::read_dir(&dst).unwrap().next().is_some(),
+            "archivio creato"
+        );
+
+        let verify =
+            execute_command(&command(CommandKind::Verify, "documents"), &config, &locks).await;
+        assert!(verify.ok, "{verify:?}");
+    }
+
+    #[cfg(feature = "hub")]
+    #[tokio::test]
+    async fn remote_command_for_an_unknown_job_is_refused() {
+        use backuppo_core::hub_protocol::CommandKind;
+        let temp = tempfile::tempdir().unwrap();
+        let config = build_config(&temp.path().join("src"), &temp.path().join("dst"));
+        let locks = locks_for(&config);
+
+        let result = execute_command(
+            &command(CommandKind::Run, "../../etc/passwd"),
+            &config,
+            &locks,
+        )
+        .await;
+        assert!(!result.ok);
+        assert!(result.detail.unwrap().contains("non presente"));
+    }
+
+    #[cfg(feature = "hub")]
+    #[tokio::test]
+    async fn remote_command_is_refused_while_the_job_is_running() {
+        use backuppo_core::hub_protocol::CommandKind;
+        let temp = tempfile::tempdir().unwrap();
+        let (src, dst) = (temp.path().join("src"), temp.path().join("dst"));
+        write_file(&src.join("a.txt"), "ciao");
+        let config = build_config(&src, &dst);
+        let locks = locks_for(&config);
+        let _running = locks["documents"].lock().await;
+
+        let result =
+            execute_command(&command(CommandKind::Run, "documents"), &config, &locks).await;
+        assert!(!result.ok);
+        assert!(result.detail.unwrap().contains("già in esecuzione"));
+        assert!(!dst.exists(), "nessun backup deve essere partito");
     }
 }

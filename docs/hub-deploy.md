@@ -50,8 +50,9 @@ backuppo-hub create-user \
   --role admin
 ```
 
-`--role` accetta `admin` (può creare clienti/siti/token e gestire tutto) o
-`read_only` (solo lettura di stato ed esecuzioni).
+`--role` accetta `admin` (può creare clienti/siti/token e gestire tutto),
+`operator` (sola lettura + può chiedere "esegui ora"/"verifica ora" agli
+agent, vedi sotto) o `read_only` (solo lettura di stato ed esecuzioni).
 
 ## Avvio
 
@@ -78,8 +79,31 @@ refresh token rotante.
 | GET/POST | `/v1/sites` | utente / admin | elenco siti / creazione (la creazione ritorna il token agent) |
 | GET | `/v1/sites/{id}/executions` | utente | storico esecuzioni del sito |
 | GET | `/v1/sites/{id}/jobs` | utente | nomi dei job distinti riportati dal sito |
-| POST | `/v1/sites/{id}/tokens` | admin | genera un nuovo token agent per il sito |
+| GET/POST | `/v1/sites/{id}/commands` | utente / admin, operator | ultimi 50 comandi del sito / richiesta `{"kind": "run"\|"verify", "job": "..."}` (409 se già in corso) |
+| GET | `/v1/commands/pending` | token agent | l'agent ritira i suoi comandi in attesa (ognuno una sola volta) |
+| POST | `/v1/commands/{id}/result` | token agent | l'agent riporta l'esito `{"ok": bool, "detail": "..."}` |
+| POST | `/v1/sites/{id}/tokens` | admin | genera un nuovo token agent per il sito (ritorna anche `token_id`) |
 | DELETE | `/v1/sites/{id}/tokens/{token_id}` | admin | revoca un token agent |
+
+## Comandi remoti ("esegui ora", "verifica ora")
+
+L'hub non si connette mai agli agent: una richiesta resta in coda sull'hub
+finché l'agent, che sta dietro NAT/firewall, la ritira col suo poll in
+uscita (`GET /v1/commands/pending`, ogni `command_poll_seconds`). Poi
+esegue l'azione e riporta l'esito. Stati: `pending` → `delivered` →
+`done` | `failed`, oppure `expired`.
+
+- **Opt-in sull'agent:** senza `remote_commands: true` nel notifier `hub`
+  l'agent non ritira nulla, e la richiesta scade.
+- **Scadenza:** una richiesta non ritirata entro 10 minuti diventa
+  `expired` e non viene mai consegnata: un backup non parte ore dopo che
+  qualcuno l'ha chiesto perché l'agent era offline.
+- **Solo azioni note:** `run` (backup + retention) e `verify` (verifica
+  restore), solo su job già presenti nella config dell'agent. Un job
+  sconosciuto o già in esecuzione fallisce con un messaggio chiaro.
+- **Niente doppi avvii:** l'hub rifiuta (409) una richiesta identica a una
+  ancora in corso.
+- **Permessi:** solo `admin` e `operator`; `read_only` riceve 403.
 
 ## systemd (bare metal)
 
@@ -156,4 +180,9 @@ mai i backup effettivi (che restano dove li hanno messi gli agent).
   i refresh token ruotano a ogni uso (`POST /v1/auth/refresh` invalida
   quello consumato e ne restituisce uno nuovo).
 - Un ruolo `read_only` non può creare clienti, siti o token: solo
-  consultare stato ed esecuzioni.
+  consultare stato ed esecuzioni. Un `operator` può in più avviare backup e
+  verifiche sugli agent che hanno attivato i comandi remoti, ma non gestire
+  clienti, siti o token.
+- Chi può creare comandi può far eseguire backup e verifiche (non comandi
+  arbitrari) sugli agent con `remote_commands: true`: assegna il ruolo
+  `operator` con la stessa cautela di un accesso alla macchina.

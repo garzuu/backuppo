@@ -266,12 +266,24 @@ pub enum NotifierConfig {
         heartbeat_seconds: u64,
         #[serde(default = "default_hub_queue_path")]
         queue_path: String,
+        /// Opt-in: se `true` il daemon ritira dall'hub i comandi "esegui
+        /// ora"/"verifica ora" e li esegue, ma solo su job presenti in
+        /// questa config. Disattivato di default.
+        #[serde(default)]
+        remote_commands: bool,
+        #[serde(default = "default_hub_command_poll_seconds")]
+        command_poll_seconds: u64,
     },
 }
 
 #[cfg(feature = "hub")]
 fn default_hub_heartbeat_seconds() -> u64 {
     60
+}
+
+#[cfg(feature = "hub")]
+fn default_hub_command_poll_seconds() -> u64 {
+    15
 }
 
 #[cfg(feature = "hub")]

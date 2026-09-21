@@ -345,11 +345,16 @@ notifiers:
                 token_env,
                 heartbeat_seconds,
                 queue_path,
+                remote_commands,
+                command_poll_seconds,
             } => {
                 assert_eq!(url, "https://hub.example.com");
                 assert_eq!(token_env, "HUB_TOKEN");
                 assert_eq!(*heartbeat_seconds, 60);
                 assert_eq!(queue_path, "backuppo-hub-queue.sqlite");
+                // I comandi remoti sono opt-in: di default sono spenti.
+                assert!(!*remote_commands);
+                assert_eq!(*command_poll_seconds, 15);
             }
             other => panic!("expected NotifierConfig::Hub, got {other:?}"),
         }

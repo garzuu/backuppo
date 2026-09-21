@@ -53,8 +53,8 @@ pub fn build(config: &NotifierConfig) -> Result<Box<dyn Notifier>, BackupError> 
         NotifierConfig::Hub {
             url,
             token_env,
-            heartbeat_seconds: _,
             queue_path,
+            ..
         } => Ok(Box::new(HubNotifier::new(url, token_env, queue_path)?)),
     }
 }

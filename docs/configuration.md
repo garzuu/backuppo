@@ -235,6 +235,8 @@ notifiers:
     token_env: HUB_TOKEN
     heartbeat_seconds: 60        # default: 60
     queue_path: /var/lib/backuppo/hub-queue.sqlite  # default: ./backuppo-hub-queue.sqlite
+    remote_commands: false       # default: false (vedi sotto)
+    command_poll_seconds: 15     # default: 15, usato solo con remote_commands
 ```
 
 L'agent manda all'hub solo metadati (esito, byte, checksum, errore),
@@ -244,6 +246,15 @@ intervallo, ritenta la consegna degli eventi rimasti nella coda locale
 (`queue_path`) con backoff esponenziale (da 30s fino a un tetto di un'ora).
 Un hub irraggiungibile non fa mai fallire un job né arresta il daemon:
 l'errore viene solo loggato.
+
+**Comandi remoti (opt-in).** Con `remote_commands: true` il daemon chiede
+all'hub ogni `command_poll_seconds` se c'è un "esegui ora" o "verifica ora"
+richiesto da un utente `admin`/`operator` (dall'app o dall'API dell'hub), lo
+esegue e riporta l'esito. Resta una connessione solo in uscita: l'hub non
+apre mai connessioni verso l'agent. Sicurezza: il comando può solo scegliere
+tra backup e verifica su un job **già presente in questa config** (mai un
+comando arbitrario), rispetta il lock per job (se il job è già in
+esecuzione la richiesta fallisce) ed è disattivato di default.
 
 ## Storico, pagina di stato e report
 
