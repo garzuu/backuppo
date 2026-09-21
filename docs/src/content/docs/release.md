@@ -1,4 +1,7 @@
-# Procedura di release
+---
+title: Procedura di release
+description: Checklist per pubblicare una nuova versione di Backuppo.
+---
 
 La pipeline `.github/workflows/release.yml` si attiva sui tag `v*`. Compila e
 allega binari Linux musl, Windows e macOS, genera `SHA256SUMS`, pubblica

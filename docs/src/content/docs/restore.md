@@ -1,4 +1,7 @@
-# Restore manuale
+---
+title: Restore manuale
+description: Come decifrare, decomprimere e ripristinare un backup senza usare bkpo.
+---
 
 Conserva una copia della configurazione e delle variabili dei segreti separata
 dai backup. Senza la passphrase `age`, un archivio cifrato non è recuperabile.

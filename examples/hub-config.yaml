@@ -1,6 +1,6 @@
 # Config di esempio per l'hub multi-sito (`backuppo-hub serve --config ...`).
 # Va sempre messo dietro un reverse proxy che termina TLS: l'hub stesso
-# parla solo HTTP in chiaro. Vedi docs/hub-deploy.md.
+# parla solo HTTP in chiaro. Vedi docs/src/content/docs/hub-deploy.md.
 
 bind: 0.0.0.0:8080
 database_path: /var/lib/backuppo-hub/hub.sqlite

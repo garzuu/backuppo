@@ -1,4 +1,7 @@
-# Deploy dell'hub multi-sito
+---
+title: Deploy dell'hub multi-sito
+description: Come compilare, configurare e mettere in produzione backuppo-hub.
+---
 
 L'hub (`backuppo-hub`) è un binario separato dall'agent, pensato per girare
 su una sola macchina di controllo e ricevere solo metadati dagli agent

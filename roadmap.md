@@ -10,6 +10,12 @@ Nome progetto: **Backuppo** · crate: `backuppo` · binario (comando): `bkpo`
 - Dopo ogni fase: `cargo fmt`, `cargo clippy -- -D warnings`, `cargo test`, poi commit.
 - Se una decisione cambia, aggiorna questo file.
 
+## Stato
+
+- Fasi 0–10: agent completo e rilasciato (`v0.1.0`), incluse le evoluzioni di Fase 10 (motore dedup, web UI locale, storage cloud aggiuntivi, immagini disco/VM).
+- Fasi 11–12: hub multi-sito e app Flutter completati.
+- **Prossimo passo: Fase 13 (sito e documentazione).** Poi lancio (14) e le evoluzioni successive.
+
 ## Obiettivo
 
 Tool di backup generico, cross-platform (Linux/Windows/macOS), open source, distribuito come **singolo binario statico**. Configurabile via YAML versionabile su git. Notifiche via SMTP e Telegram. Differenziatore principale: **verifica automatica del restore**.
@@ -226,6 +232,70 @@ Prerequisito: API hub `/v1` stabile. **Repo separato** da `backuppo` (vedi "Stru
 Nota: il semaforo è calcolato dall'app sugli eventi (l'hub non espone uno stato aggregato per sito oltre a online/offline). `POST /v1/sites/{id}/tokens` ora restituisce anche `token_id` (campo aggiunto, compatibile con `/v1`).
 
 **Fatto quando:** dal telefono vedi lo stato di tutti i siti, ricevi la push di un fallimento e apri il log dell'errore.
+
+## Fase 13 — Sito e documentazione (DA INIZIARE)
+
+Obiettivo: chi arriva sul sito capisce in 30 secondi cosa fa Backuppo e come si installa.
+
+- [ ] Scelta dominio (`backuppo.dev` o simile, da verificare) e hosting statico (GitHub Pages o Cloudflare Pages)
+- [x] Generatore di sito statico con docs integrate (Astro Starlight in `docs/`, contenuti in `docs/src/content/docs/`); versionati col codice. Archivi di release e link nel repo puntano ai singoli `.md`, non all'intero progetto Astro
+- [ ] **Landing page**: cos'è, il problema ("hai mai provato a fare il restore?"), il differenziatore (restore verificato), installazione in una riga, mascotte
+- [ ] **Demo** di 1–2 minuti (GIF o asciinema): backup → corruzione di un byte → `bkpo verify` che fallisce con messaggio chiaro
+- [ ] Tabella di confronto onesta con Iperius, restic, borg, kopia (cosa fa meglio, cosa non fa)
+- [ ] Documentazione: quickstart, riferimento config completo, guida al restore manuale, sorgenti/destinazioni/notifiche, hub e app
+- [ ] Pagina Download con link alle release e istruzioni per Linux, Windows, macOS, Docker
+- [ ] Changelog pubblico e pagina Roadmap (derivata da questo file)
+- [ ] Mascotte (ippopotamo), logo e favicon; immagine Open Graph per le anteprime social
+- [ ] SEO di base (titoli, meta, sitemap) e analytics rispettosi della privacy, oppure nessuna analytics
+- [ ] CI che pubblica il sito a ogni merge su `main` e controlla i link rotti
+
+**Fatto quando:** il sito è online sul dominio scelto, con landing, demo e docs complete, e una persona che non conosce il progetto riesce a installarlo e a fare un primo backup seguendo solo il quickstart.
+
+## Fase 14 — Distribuzione e lancio
+
+- [ ] Pacchetti: Homebrew, winget, AUR, `.deb`/`.rpm`
+- [ ] Immagine Docker su registry pubblico (GHCR e Docker Hub)
+- [ ] Script di installazione in una riga con verifica checksum e firma delle release
+- [ ] `README.md` del repo allineato al sito (badge, demo, quickstart)
+- [ ] Template per issue e discussioni, `CONTRIBUTING.md`, `SECURITY.md`
+- [ ] Lancio su r/selfhosted, r/homelab e Hacker News (Show HN), con il demo del restore verificato
+- [ ] Raccolta feedback e priorità della prossima fase basate sulle richieste reali
+
+**Fatto quando:** l'installazione funziona con i gestori di pacchetti principali e il progetto è stato presentato almeno su due community.
+
+## Fase 15 — Protezione da ransomware
+
+- [ ] Destinazioni append-only / object lock (S3 immutabile, `chattr +a` o equivalenti)
+- [ ] Credenziali di upload con permessi di sola scrittura, senza diritto di cancellazione
+- [ ] Retention gestita lato destinazione o da un ruolo separato, non dall'agent
+- [ ] Rotazione delle chiavi di cifratura e backup delle chiavi (guida + comando `bkpo keys`)
+- [ ] Documentazione "modello di minaccia": cosa succede se il server sorgente viene compromesso
+
+**Fatto quando:** con un agent compromesso non è possibile cancellare né sovrascrivere i backup già caricati.
+
+## Fase 16 — Restore assistito
+
+- [ ] `bkpo restore` interattivo: scegli job, data e destinazione
+- [ ] Sfogliare un backup e recuperare singoli file o cartelle
+- [ ] Restore di database direttamente in un container o server di destinazione
+- [ ] Modalità `--dry-run` che mostra cosa verrebbe ripristinato
+
+**Fatto quando:** un utente ripristina un singolo file da un backup di tre settimane fa senza leggere la documentazione del formato.
+
+## Fase 17 — Interfaccia locale
+
+- [ ] Web UI servita dal daemon con editor di config (job, destinazioni, notifiche) che scrive lo stesso YAML
+- [ ] Vista stato, log ed esecuzioni; avvio manuale di job e verifica
+- [ ] Opzionale: finestra desktop con Tauri e icona nella tray per gli utenti Windows
+
+**Fatto quando:** un utente Windows configura ed esegue un job completo senza toccare il file YAML.
+
+## Fase 18 — Integrazioni
+
+- [ ] Endpoint metriche Prometheus
+- [ ] Integrazione Home Assistant
+- [ ] Server MCP per interrogare lo stato dei backup da Claude ("quali job sono falliti questa settimana?"), in sola lettura
+- [ ] Valutare modello a pagamento per l'hub gestito, lasciando l'agent open source
 
 ---
 
