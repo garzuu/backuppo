@@ -230,7 +230,7 @@ fn default_retry_max_times() -> usize {
     3
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NotifierConfig {
     Telegram {
@@ -248,6 +248,27 @@ pub enum NotifierConfig {
     Webhook {
         url: String,
     },
+    /// Canale verso l'hub multi-sito: l'agent gli spedisce solo metadati
+    /// (esiti, durate, errori), mai contenuto dei backup né segreti.
+    #[cfg(feature = "hub")]
+    Hub {
+        url: String,
+        token_env: String,
+        #[serde(default = "default_hub_heartbeat_seconds")]
+        heartbeat_seconds: u64,
+        #[serde(default = "default_hub_queue_path")]
+        queue_path: String,
+    },
+}
+
+#[cfg(feature = "hub")]
+fn default_hub_heartbeat_seconds() -> u64 {
+    60
+}
+
+#[cfg(feature = "hub")]
+fn default_hub_queue_path() -> String {
+    "backuppo-hub-queue.sqlite".to_string()
 }
 
 #[derive(Debug, Deserialize)]

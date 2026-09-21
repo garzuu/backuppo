@@ -1,0 +1,28 @@
+# Config di esempio per l'hub multi-sito (`backuppo-hub serve --config ...`).
+# Va sempre messo dietro un reverse proxy che termina TLS: l'hub stesso
+# parla solo HTTP in chiaro. Vedi docs/hub-deploy.md.
+
+bind: 0.0.0.0:8080
+database_path: /var/lib/backuppo-hub/hub.sqlite
+
+# Segreto per firmare i JWT di accesso: generarlo con `openssl rand -hex 32`
+# e impostarlo solo come variabile d'ambiente, mai nel file di config.
+jwt_secret_env: HUB_JWT_SECRET
+
+access_token_minutes: 15
+refresh_token_days: 30
+
+# Un sito senza heartbeat da più di questi minuti viene marcato offline.
+offline_after_minutes: 15
+
+# Notifier riusati per gli alert dell'hub stesso (stesso formato della
+# config agent: telegram, smtp, webhook).
+notifiers:
+  ops-telegram:
+    type: telegram
+    token_env: TELEGRAM_BOT_TOKEN
+    chat_id: "123456789"
+
+notify_on_offline: [ops-telegram]
+# Notifica un job/verifica restore falliti non appena un agent li riporta.
+notify_on_failure: [ops-telegram]

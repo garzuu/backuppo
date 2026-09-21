@@ -226,6 +226,12 @@ async fn a_failing_pre_hook_stops_the_backup() {
 
 #[tokio::test]
 async fn a_failing_post_hook_does_not_invalidate_an_uploaded_backup() {
+    // SAFETY: valore costante, coerente con le altre scritture di questa
+    // env var nel file; non dipende dall'ordine di esecuzione degli altri test.
+    unsafe {
+        std::env::set_var("BACKUPPER_TEST_PASSPHRASE", "correct horse battery staple");
+    }
+
     let src_dir = tempfile::tempdir().unwrap();
     let dst_dir = tempfile::tempdir().unwrap();
     write_file(&src_dir.path().join("a.txt"), "data");

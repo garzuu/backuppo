@@ -94,9 +94,7 @@ impl Source for LibvirtVmSource {
                 .file_name()
                 .and_then(|value| value.to_str())
                 .unwrap_or("disk.img");
-            let destination = staging
-                .join("disks")
-                .join(format!("{target}-{suffix}"));
+            let destination = staging.join("disks").join(format!("{target}-{suffix}"));
             bytes += Self::copy_disk(&source, &destination).await?;
             files += 1;
         }

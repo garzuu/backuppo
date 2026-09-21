@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+# Client dell'hub: senza questa feature il tipo di notifier `hub` non esiste
+# nemmeno a livello di config, coerentemente con l'agent stand-alone.
+hub = []
+
 [dependencies]
 async-trait = "0.1.92"
 cron = "0.17.0"

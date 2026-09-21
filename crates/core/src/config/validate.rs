@@ -321,4 +321,37 @@ jobs:
             .iter()
             .any(|error| matches!(error, ConfigError::InvalidApiBind { .. })));
     }
+
+    #[cfg(feature = "hub")]
+    #[test]
+    fn parses_hub_notifier_with_defaults() {
+        use super::super::NotifierConfig;
+
+        let yaml = r#"
+notifiers:
+  sede-centrale:
+    type: hub
+    url: https://hub.example.com
+    token_env: HUB_TOKEN
+"#;
+        let config = Config::from_yaml(yaml).expect("parsing valido");
+        let notifier = config
+            .notifiers
+            .get("sede-centrale")
+            .expect("notifier presente");
+        match notifier {
+            NotifierConfig::Hub {
+                url,
+                token_env,
+                heartbeat_seconds,
+                queue_path,
+            } => {
+                assert_eq!(url, "https://hub.example.com");
+                assert_eq!(token_env, "HUB_TOKEN");
+                assert_eq!(*heartbeat_seconds, 60);
+                assert_eq!(queue_path, "backuppo-hub-queue.sqlite");
+            }
+            other => panic!("expected NotifierConfig::Hub, got {other:?}"),
+        }
+    }
 }

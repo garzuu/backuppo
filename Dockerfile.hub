@@ -1,0 +1,21 @@
+FROM rust:1-alpine3.22 AS builder
+
+RUN apk add --no-cache build-base cmake perl
+WORKDIR /src
+COPY . .
+RUN cargo build --locked --release --package backuppo-hub
+
+FROM alpine:3.22
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S backuppo-hub \
+    && adduser -S -G backuppo-hub -h /var/lib/backuppo-hub backuppo-hub \
+    && mkdir -p /etc/backuppo-hub /var/lib/backuppo-hub \
+    && chown -R backuppo-hub:backuppo-hub /var/lib/backuppo-hub
+COPY --from=builder /src/target/release/backuppo-hub /usr/local/bin/backuppo-hub
+
+USER backuppo-hub
+VOLUME ["/var/lib/backuppo-hub"]
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/backuppo-hub"]
+CMD ["serve", "--config", "/etc/backuppo-hub/config.yaml"]

@@ -69,6 +69,16 @@ notifiers:
     type: webhook
     url: https://hooks.example.com/backuppo
 
+  # Richiede il binario compilato con la feature Cargo `hub` (Fase 11,
+  # opt-in). Manda solo metadati (esiti, durate, errori) all'hub, mai
+  # contenuto dei backup né segreti.
+  # sede-centrale:
+  #   type: hub
+  #   url: https://hub.example.com
+  #   token_env: HUB_TOKEN
+  #   heartbeat_seconds: 60
+  #   queue_path: /var/lib/backuppo/hub-queue.sqlite
+
 observability:
   history_path: /var/lib/backuppo/history.sqlite
   status_page: /var/lib/backuppo/status.html
