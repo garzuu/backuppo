@@ -1,0 +1,45 @@
+---
+title: Backuppo
+description: Open source, cross-platform backup with automatic restore verification.
+template: splash
+hero:
+  tagline: Have you ever tried restoring? Backuppo automatically verifies every backup, not just runs it.
+  actions:
+    - text: Quickstart
+      link: /en/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/garzuu/backuppo
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What is Backuppo
+
+A general-purpose backup tool for Linux, Windows and macOS, distributed as a
+single static binary. Git-versionable YAML configuration, notifications via
+SMTP, Telegram, webhook and ntfy.
+
+<CardGrid stagger>
+	<Card title="Automatic restore verification" icon="approve-check">
+		A backup is only considered successful once the upload is confirmed
+		and, if enabled, the restore has been verified: file count, sizes,
+		checksum of a sample, sanity query for databases.
+	</Card>
+	<Card title="Single static binary" icon="rocket">
+		No separate dependencies to install. Static builds for Linux (musl),
+		Windows and macOS, plus a minimal Docker image.
+	</Card>
+	<Card title="Sources and destinations" icon="setting">
+		Folders, PostgreSQL, MySQL/MariaDB, SQLite, Docker volumes, custom
+		commands. Local, SFTP, S3-compatible, WebDAV, Google Drive, Dropbox,
+		OneDrive.
+	</Card>
+	<Card title="Optional multi-site hub" icon="open-book">
+		The agent always works stand-alone. An optional hub collects state and
+		metadata from multiple sites, with offline detection and a Flutter
+		monitoring app.
+	</Card>
+</CardGrid>

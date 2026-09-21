@@ -8,26 +8,54 @@ export default defineConfig({
     starlight({
       title: 'Backuppo',
       description:
-        "Backup open source, cross-platform, con verifica automatica del restore.",
+        'Backup open source, cross-platform, con verifica automatica del restore.',
+      defaultLocale: 'root',
+      locales: {
+        root: { label: 'Italiano', lang: 'it' },
+        en: { label: 'English', lang: 'en' },
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/garzuu/backuppo' },
       ],
       sidebar: [
         {
           label: 'Guida',
+          translations: { en: 'Guide' },
           items: [
             { label: 'Quickstart', slug: 'quickstart' },
-            { label: 'Riferimento configurazione', slug: 'configuration' },
-            { label: 'Restore manuale', slug: 'restore' },
+            {
+              label: 'Riferimento configurazione',
+              translations: { en: 'Configuration reference' },
+              slug: 'configuration',
+            },
+            {
+              label: 'Restore manuale',
+              translations: { en: 'Manual restore' },
+              slug: 'restore',
+            },
           ],
         },
         {
           label: 'Hub multi-sito',
-          items: [{ label: 'Deploy dell\'hub', slug: 'hub-deploy' }],
+          translations: { en: 'Multi-site hub' },
+          items: [
+            {
+              label: "Deploy dell'hub",
+              translations: { en: 'Deploying the hub' },
+              slug: 'hub-deploy',
+            },
+          ],
         },
         {
           label: 'Progetto',
-          items: [{ label: 'Procedura di release', slug: 'release' }],
+          translations: { en: 'Project' },
+          items: [
+            {
+              label: 'Procedura di release',
+              translations: { en: 'Release process' },
+              slug: 'release',
+            },
+          ],
         },
       ],
     }),
