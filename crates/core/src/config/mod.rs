@@ -248,6 +248,14 @@ pub enum NotifierConfig {
     Webhook {
         url: String,
     },
+    /// Push tramite ntfy (ntfy.sh o self-hosted): pubblica su `<url>/<topic>`.
+    /// `token_env` è opzionale (topic protetti da autenticazione).
+    Ntfy {
+        url: String,
+        topic: String,
+        #[serde(default)]
+        token_env: Option<String>,
+    },
     /// Canale verso l'hub multi-sito: l'agent gli spedisce solo metadati
     /// (esiti, durate, errori), mai contenuto dei backup né segreti.
     #[cfg(feature = "hub")]
