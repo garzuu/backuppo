@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use backuppo_core::error::BackupError;
+use backuppo_core::hub_protocol::EventPayload;
 use backuppo_core::model::JobEvent;
 use backuppo_core::secrets::resolve_env;
 use backuppo_core::traits::Notifier;
@@ -21,55 +22,6 @@ pub struct HubNotifier {
     token: String,
     client: Client,
     queue_path: PathBuf,
-}
-
-#[derive(Debug, Serialize)]
-struct HubEventPayload {
-    kind: &'static str,
-    job: Option<String>,
-    detail: Option<String>,
-    bytes: Option<u64>,
-    files: Option<u64>,
-    checksum: Option<String>,
-}
-
-impl From<&JobEvent> for HubEventPayload {
-    fn from(event: &JobEvent) -> Self {
-        match event {
-            JobEvent::Success { job, artifact } => Self {
-                kind: "success",
-                job: Some(job.clone()),
-                detail: None,
-                bytes: Some(artifact.bytes),
-                files: Some(artifact.files),
-                checksum: Some(artifact.checksum.clone()),
-            },
-            JobEvent::Failure { job, error } => Self {
-                kind: "failure",
-                job: Some(job.clone()),
-                detail: Some(error.clone()),
-                bytes: None,
-                files: None,
-                checksum: None,
-            },
-            JobEvent::RestoreVerified { job, detail } => Self {
-                kind: "restore_verified",
-                job: Some(job.clone()),
-                detail: Some(detail.clone()),
-                bytes: None,
-                files: None,
-                checksum: None,
-            },
-            JobEvent::Report { summary } => Self {
-                kind: "report",
-                job: None,
-                detail: Some(summary.clone()),
-                bytes: None,
-                files: None,
-                checksum: None,
-            },
-        }
-    }
 }
 
 impl HubNotifier {
@@ -121,7 +73,7 @@ impl HubNotifier {
 #[async_trait]
 impl Notifier for HubNotifier {
     async fn send(&self, event: &JobEvent) -> Result<(), BackupError> {
-        let payload = HubEventPayload::from(event);
+        let payload = EventPayload::from(event);
         if let Err(error) = self.post("/v1/events", &payload).await {
             warn!(%error, "invio evento all'hub fallito, metto in coda per retry");
             let queue = HubQueue::open(&self.queue_path)?;

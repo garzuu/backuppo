@@ -3,6 +3,7 @@
 
 pub mod config;
 pub mod error;
+pub mod hub_protocol;
 pub mod model;
 pub mod secrets;
 pub mod traits;

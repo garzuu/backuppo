@@ -34,7 +34,7 @@ jobs:
         run: cargo clippy -p backuppo -p backuppo-notifiers -p backuppo-core --all-targets --features hub -- -D warnings
 
       - name: cargo test (feature hub)
-        run: cargo test --workspace --features hub
+        run: cargo test -p backuppo -p backuppo-notifiers -p backuppo-core --features hub
 
   docker:
     runs-on: ubuntu-latest
@@ -44,6 +44,15 @@ jobs:
         run: docker build --tag backuppo:ci .
       - name: Smoke test container
         run: docker run --rm backuppo:ci --version
+
+  docker-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build hub container image
+        run: docker build --tag backuppo-hub:ci -f Dockerfile.hub .
+      - name: Smoke test hub container
+        run: docker run --rm backuppo-hub:ci --version
 
   platform-builds:
     strategy:

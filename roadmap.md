@@ -54,8 +54,8 @@ backuppo/
 │   ├── destinations/       # local, sftp, s3, webdav (via opendal)
 │   ├── notifiers/          # smtp, telegram, webhook, hub (feature `hub`)
 │   ├── cli/                # binario agent: clap, scheduler, logging
-│   └── hub/                # (Fase 11) binario hub: API, DB, heartbeat
-└── examples/config.yaml
+│   └── hub/                # binario hub: API /v1, DB, heartbeat, offline detection
+└── examples/config.yaml, examples/hub-config.yaml
 ```
 
 Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri dipendono da `core`.
@@ -191,15 +191,19 @@ Prerequisito: agent stabile, storico strutturato (Fase 8).
 - [x] Test: l'agent compila, gira e passa tutti i test **senza** la feature `hub`
 
 **Lato hub (`crates/hub`, binario separato)**
-- [ ] API `/v1`: registrazione eventi, elenco clienti/siti/job/esecuzioni, log
-- [ ] Database (SQLite per iniziare, Postgres opzionale)
-- [ ] Modello `Cliente → Sito → Job → Esecuzione` e ruoli (admin, sola lettura)
-- [ ] Token per agent, creazione e revoca singola
-- [ ] Login utenti con JWT a scadenza breve + refresh token
-- [ ] **Rilevamento offline**: sito senza heartbeat da X minuti → stato `offline` + notifica
-- [ ] Notifiche dell'hub (mail/Telegram/push) su fallimenti, verifiche fallite, siti offline
-- [ ] Web UI minimale per test e uso senza app
-- [ ] Immagine Docker dell'hub e guida al deploy dietro reverse proxy HTTPS
+- [x] API `/v1`: registrazione eventi, elenco clienti/siti/job/esecuzioni, log
+- [x] Database (SQLite per iniziare, Postgres opzionale — non ancora necessario)
+- [x] Modello `Cliente → Sito → Job → Esecuzione` e ruoli (admin, sola lettura)
+- [x] Token per agent, creazione e revoca singola
+- [x] Login utenti con JWT a scadenza breve + refresh token
+- [x] **Rilevamento offline**: sito senza heartbeat da X minuti → stato `offline` + notifica
+- [x] Notifiche dell'hub (mail/Telegram/webhook, anche verso ntfy) su fallimenti, verifiche fallite, siti offline
+- [x] Web UI minimale per test e uso senza app
+- [x] Immagine Docker dell'hub e guida al deploy dietro reverse proxy HTTPS
+
+Nota: il modello `Job` non ha una tabella propria — è il valore distinto
+del campo `job` sulle esecuzioni ricevute (`GET /v1/sites/{id}/jobs`),
+così non serve pre-registrare i nomi dei job lato hub.
 
 **Fatto quando:** due agent su macchine diverse mandano stato all'hub, uno viene spento e l'hub lo segna offline e notifica. Con l'hub giù, gli agent continuano a fare backup e rispediscono gli eventi al ritorno.
 

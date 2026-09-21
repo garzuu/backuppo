@@ -230,7 +230,7 @@ fn default_retry_max_times() -> usize {
     3
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NotifierConfig {
     Telegram {
