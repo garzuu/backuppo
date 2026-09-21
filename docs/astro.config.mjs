@@ -3,7 +3,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://backuppo.dev',
+  site: 'https://backuppo.garzuu.com',
   integrations: [
     starlight({
       title: 'Backuppo',
