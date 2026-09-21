@@ -4,15 +4,22 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+hub = ["backuppo-core/hub", "dep:rusqlite", "dep:serde_json"]
+
 [dependencies]
 async-trait = "0.1.92"
 backuppo-core.workspace = true
 lettre = { version = "0.11.23", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json"] }
+rusqlite = { version = "0.40.2", features = ["bundled"], optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", optional = true }
 tokio = { version = "1.53.1", features = ["rt"] }
+tracing = "0.1.44"
 
 [dev-dependencies]
 serde_json = "1.0.151"
+tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync"] }
 wiremock = "0.6.5"

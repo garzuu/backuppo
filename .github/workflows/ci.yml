@@ -30,6 +30,12 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
 
+      - name: cargo clippy (feature hub)
+        run: cargo clippy -p backuppo -p backuppo-notifiers -p backuppo-core --all-targets --features hub -- -D warnings
+
+      - name: cargo test (feature hub)
+        run: cargo test --workspace --features hub
+
   docker:
     runs-on: ubuntu-latest
     steps:

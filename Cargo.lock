@@ -401,9 +401,12 @@ dependencies = [
  "backuppo-core",
  "lettre",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
+ "tracing",
  "wiremock",
 ]
 

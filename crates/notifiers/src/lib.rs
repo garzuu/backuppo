@@ -1,9 +1,13 @@
 //! Crate `notifiers`: implementazioni del trait `Notifier` di `core`.
 
+#[cfg(feature = "hub")]
+pub mod hub;
 mod smtp;
 mod telegram;
 mod webhook;
 
+#[cfg(feature = "hub")]
+pub use hub::HubNotifier;
 pub use smtp::SmtpNotifier;
 pub use telegram::TelegramNotifier;
 pub use webhook::WebhookNotifier;
@@ -34,5 +38,12 @@ pub fn build(config: &NotifierConfig) -> Result<Box<dyn Notifier>, BackupError> 
             to,
         )?)),
         NotifierConfig::Webhook { url } => Ok(Box::new(WebhookNotifier::new(url)?)),
+        #[cfg(feature = "hub")]
+        NotifierConfig::Hub {
+            url,
+            token_env,
+            heartbeat_seconds: _,
+            queue_path,
+        } => Ok(Box::new(HubNotifier::new(url, token_env, queue_path)?)),
     }
 }

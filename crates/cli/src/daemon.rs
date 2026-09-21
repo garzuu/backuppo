@@ -30,6 +30,8 @@ where
             .collect(),
     );
     let api_handle = crate::api::spawn(Arc::clone(&config), Arc::clone(&locks)).await?;
+    #[cfg(feature = "hub")]
+    let hub_handle = spawn_hub_tasks(&config);
 
     let scheduler = JobScheduler::new()
         .await
@@ -104,9 +106,57 @@ where
     if let Some(handle) = api_handle {
         handle.abort();
     }
+    #[cfg(feature = "hub")]
+    if let Some(handle) = hub_handle {
+        handle.abort();
+    }
     info!("shutdown completato");
 
     Ok(())
+}
+
+/// Avvia, se in config è presente un notifier di tipo `hub`, un task che
+/// manda heartbeat periodici e ritenta l'invio degli eventi rimasti in coda
+/// locale. Nessun errore verso l'hub deve mai arrestare il daemon o far
+/// fallire un job: viene solo loggato.
+#[cfg(feature = "hub")]
+fn spawn_hub_tasks(config: &Config) -> Option<tokio::task::JoinHandle<()>> {
+    use backuppo_core::config::NotifierConfig;
+
+    let (url, token_env, heartbeat_seconds, queue_path) =
+        config
+            .notifiers
+            .values()
+            .find_map(|notifier| match notifier {
+                NotifierConfig::Hub {
+                    url,
+                    token_env,
+                    heartbeat_seconds,
+                    queue_path,
+                } => Some((
+                    url.clone(),
+                    token_env.clone(),
+                    *heartbeat_seconds,
+                    queue_path.clone(),
+                )),
+                _ => None,
+            })?;
+
+    Some(tokio::spawn(async move {
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_secs(heartbeat_seconds.max(1)));
+        loop {
+            interval.tick().await;
+            if let Err(error) = backuppo_notifiers::hub::send_heartbeat(&url, &token_env).await {
+                warn!(%error, "heartbeat verso l'hub fallito");
+            }
+            match backuppo_notifiers::hub::flush_queue(&url, &token_env, &queue_path).await {
+                Ok(0) => {}
+                Ok(count) => info!(count, "eventi in coda consegnati all'hub"),
+                Err(error) => warn!(%error, "flush della coda eventi hub fallito"),
+            }
+        }
+    }))
 }
 
 async fn run_one_tick(

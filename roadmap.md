@@ -184,11 +184,11 @@ Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri 
 Prerequisito: agent stabile, storico strutturato (Fase 8).
 
 **Lato agent**
-- [ ] `Notifier` di tipo `hub` dietro feature flag `hub` (config: `url`, `token_env`, `heartbeat`)
-- [ ] Heartbeat periodico dal daemon
-- [ ] Coda locale degli eventi non inviati (file/SQLite) con retry e backoff
-- [ ] Un errore di invio all'hub viene loggato ma **non fa mai fallire un job**
-- [ ] Test: l'agent compila, gira e passa tutti i test **senza** la feature `hub`
+- [x] `Notifier` di tipo `hub` dietro feature flag `hub` (config: `url`, `token_env`, `heartbeat`)
+- [x] Heartbeat periodico dal daemon
+- [x] Coda locale degli eventi non inviati (file/SQLite) con retry e backoff
+- [x] Un errore di invio all'hub viene loggato ma **non fa mai fallire un job**
+- [x] Test: l'agent compila, gira e passa tutti i test **senza** la feature `hub`
 
 **Lato hub (`crates/hub`, binario separato)**
 - [ ] API `/v1`: registrazione eventi, elenco clienti/siti/job/esecuzioni, log

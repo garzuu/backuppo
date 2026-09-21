@@ -9,6 +9,9 @@ description = "Backup agent cross-platform con verifica automatica del restore"
 name = "bkpo"
 path = "src/main.rs"
 
+[features]
+hub = ["backuppo-core/hub", "backuppo-notifiers/hub"]
+
 [dependencies]
 backuppo-core.workspace = true
 backuppo-engine.workspace = true

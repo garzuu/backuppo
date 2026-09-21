@@ -200,6 +200,30 @@ notifiers:
 Il webhook invia JSON con `event`, `job`, `text`, `content` e `message`, più i
 metadati dell'archivio quando disponibili.
 
+### Hub multi-sito (opt-in)
+
+Disponibile solo nei binari compilati con la feature Cargo `hub`
+(`cargo build --features hub`); nei binari di release standard il tipo
+`hub` non esiste nemmeno a livello di parsing della config.
+
+```yaml
+notifiers:
+  sede-centrale:
+    type: hub
+    url: https://hub.example.com
+    token_env: HUB_TOKEN
+    heartbeat_seconds: 60        # default: 60
+    queue_path: /var/lib/backuppo/hub-queue.sqlite  # default: ./backuppo-hub-queue.sqlite
+```
+
+L'agent manda all'hub solo metadati (esito, byte, checksum, errore),
+mai contenuto dei backup né segreti. Se configurato, il daemon (`bkpo
+daemon`) manda un heartbeat all'hub ogni `heartbeat_seconds` e, allo stesso
+intervallo, ritenta la consegna degli eventi rimasti nella coda locale
+(`queue_path`) con backoff esponenziale (da 30s fino a un tetto di un'ora).
+Un hub irraggiungibile non fa mai fallire un job né arresta il daemon:
+l'errore viene solo loggato.
+
 ## Storico, pagina di stato e report
 
 ```yaml
