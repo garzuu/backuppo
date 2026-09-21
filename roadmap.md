@@ -55,11 +55,12 @@ backuppo/
 │   ├── notifiers/          # smtp, telegram, webhook, hub (feature `hub`)
 │   ├── cli/                # binario agent: clap, scheduler, logging
 │   └── hub/                # (Fase 11) binario hub: API, DB, heartbeat
-├── app/                    # (Fase 12) app Flutter
 └── examples/config.yaml
 ```
 
 Regola: `core` non dipende da nessun altro crate del workspace; tutti gli altri dipendono da `core`.
+
+**Repo**: agent e hub restano in **questo** repository (stesso workspace Cargo), così l'hub riusa direttamente i tipi condivisi di `core` senza doverli pubblicare o pinnare come dipendenza esterna. L'**app Flutter** (Fase 12) vive invece in un **repository separato**: toolchain e pipeline di build completamente diverse, nessun beneficio dallo stare nello stesso workspace Cargo.
 
 ## Trait di riferimento (in `core`)
 
@@ -204,9 +205,9 @@ Prerequisito: agent stabile, storico strutturato (Fase 8).
 
 ## Fase 12 — App Flutter
 
-Prerequisito: API hub `/v1` stabile.
+Prerequisito: API hub `/v1` stabile. **Repo separato** da `backuppo` (vedi "Struttura del workspace").
 
-- [ ] Progetto Flutter in `app/` (Riverpod, `dio`, `go_router`, `drift` per cache offline, `fl_chart`)
+- [ ] Progetto Flutter in un repository dedicato (Riverpod, `dio`, `go_router`, `drift` per cache offline, `fl_chart`)
 - [ ] Login e gestione connessione all'hub
 - [ ] Home con semaforo per sito: ok / warning / errore / offline
 - [ ] Dettaglio sito → job → esecuzione con log ed errore
