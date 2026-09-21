@@ -78,6 +78,9 @@ fn payload_for(event: &JobEvent) -> WebhookPayload {
             ("restore_verified", Some(job.clone()), None, None, None)
         }
         JobEvent::Report { .. } => ("report", None, None, None, None),
+        JobEvent::SiteOffline { site, .. } => {
+            ("site_offline", Some(site.clone()), None, None, None)
+        }
     };
     WebhookPayload {
         event: event_name,

@@ -14,10 +14,26 @@ pub struct Artifact {
 /// `Notifier` configurati.
 #[derive(Debug, Clone)]
 pub enum JobEvent {
-    Success { job: String, artifact: Artifact },
-    Failure { job: String, error: String },
-    RestoreVerified { job: String, detail: String },
-    Report { summary: String },
+    Success {
+        job: String,
+        artifact: Artifact,
+    },
+    Failure {
+        job: String,
+        error: String,
+    },
+    RestoreVerified {
+        job: String,
+        detail: String,
+    },
+    Report {
+        summary: String,
+    },
+    /// Un sito non manda heartbeat da oltre `minutes` minuti (solo hub).
+    SiteOffline {
+        site: String,
+        minutes: i64,
+    },
 }
 
 impl std::fmt::Display for JobEvent {
@@ -33,6 +49,36 @@ impl std::fmt::Display for JobEvent {
                 write!(f, "job '{job}': restore verificato: {detail}")
             }
             JobEvent::Report { summary } => write!(f, "{summary}"),
+            JobEvent::SiteOffline { site, minutes } => write!(
+                f,
+                "sito '{site}' offline: nessun heartbeat da oltre {minutes} {}",
+                if *minutes == 1 { "minuto" } else { "minuti" }
+            ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn site_offline_message_is_worded_for_a_site_and_pluralizes() {
+        let one = JobEvent::SiteOffline {
+            site: "sede-b".to_string(),
+            minutes: 1,
+        };
+        assert_eq!(
+            one.to_string(),
+            "sito 'sede-b' offline: nessun heartbeat da oltre 1 minuto"
+        );
+        let many = JobEvent::SiteOffline {
+            site: "sede-b".to_string(),
+            minutes: 15,
+        };
+        assert_eq!(
+            many.to_string(),
+            "sito 'sede-b' offline: nessun heartbeat da oltre 15 minuti"
+        );
     }
 }
