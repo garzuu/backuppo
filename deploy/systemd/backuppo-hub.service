@@ -8,7 +8,7 @@ Type=simple
 User=backuppo-hub
 Group=backuppo-hub
 EnvironmentFile=-/etc/backuppo-hub/backuppo-hub.env
-Environment=RUST_LOG=backuppo_hub=info
+Environment=RUST_LOG=info
 ExecStart=/usr/local/bin/backuppo-hub serve --config /etc/backuppo-hub/config.yaml
 Restart=on-failure
 RestartSec=10s

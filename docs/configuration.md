@@ -285,3 +285,18 @@ alternativa usa `bkpo serve --config config.yaml`. L'API espone
 `POST /api/v1/jobs/{nome}/run`. Per evitare esposizioni accidentali il bind
 accetta solo indirizzi IP loopback. La richiesta `POST` richiede anche
 l'header `X-Backuppo-UI: 1`, usato dalla UI per impedire trigger cross-site.
+
+## Log
+
+I log vanno su **stderr** (stdout è riservato ai risultati dei comandi) e
+sono senza colori quando stderr non è un terminale, quindi file di log e
+journald restano leggibili. Senza `RUST_LOG`:
+
+- `bkpo daemon` e `bkpo serve` loggano a livello `info` per i crate di
+  Backuppo e `warn` per le dipendenze;
+- i comandi one-shot (`run`, `verify`, `check`, ...) mostrano solo `warn` ed
+  errori.
+
+Per cambiare il livello imposta `RUST_LOG`, ad esempio `RUST_LOG=debug` o
+`RUST_LOG=info,backuppo_engine=debug`. Attenzione ai nomi: il target del
+binario è `bkpo`, non `backuppo`.
