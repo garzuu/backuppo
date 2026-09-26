@@ -1,5 +1,5 @@
-const CACHE = "backuppo-shell-v1";
-const SHELL = ["/", "/app.js", "/app.css", "/manifest.webmanifest"];
+const CACHE = "backuppo-shell-v3";
+const SHELL = ["/", "/app.js", "/app.css", "/manifest.webmanifest", "/backuppo-squirrel-192.png", "/backuppo-squirrel-512.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));

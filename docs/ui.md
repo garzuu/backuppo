@@ -21,9 +21,20 @@ salvataggio rifiuta modifiche concorrenti, crea `config.yaml.bak`, sostituisce
 il file atomicamente e ne conserva i permessi. I valori delle variabili
 `*_env` non vengono letti o memorizzati dalla UI.
 
-Il pulsante **Applica** ricostruisce scheduler, lock e task dell'hub senza
-interrompere i job già in corso. Una modifica a `api.bind` richiede il riavvio
-perché il listener attivo non viene spostato.
+Il **Wizard** è il percorso principale per configurare i backup. La colonna
+laterale elenca tutti i job dell'installazione e consente di crearli,
+duplicarli, rinominarli ed eliminarli. Ogni job segue cinque passi: sorgente,
+destinazione, pianificazione e conservazione, protezione e riepilogo. Le
+destinazioni possono essere condivise tra più job; prima di modificarne una
+condivisa, il wizard mostra quali job verranno interessati. La vista YAML
+rimane disponibile come modalità avanzata.
+
+**Salva bozza** aggiorna il file senza cambiare il runtime; **Salva e
+applica** valida, salva e ricarica immediatamente scheduler e job.
+
+L'applicazione della configurazione ricostruisce scheduler, lock e task
+dell'hub senza interrompere i job già in corso. Una modifica a `api.bind`
+richiede il riavvio perché il listener attivo non viene spostato.
 
 ## Hub
 

@@ -304,6 +304,7 @@ Obiettivo: chi arriva sul sito capisce in 30 secondi cosa fa Backuppo e come si 
 - [x] SPA React/TypeScript condivisa tra agent e hub, incorporata nei binari
 - [x] Dashboard agent, storico/log e run/verify asincroni
 - [x] Validazione, salvataggio atomico e reload esplicito della config locale
+- [x] Wizard multi-job per sorgente, destinazione, schedule, retention e protezione
 - [x] Dashboard hub, comandi remoti e amministrazione utenti/token
 - [x] PWA con cache limitata all'app shell
 - [x] Sessione browser hub con cookie HttpOnly e protezione CSRF

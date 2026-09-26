@@ -1,44 +1,56 @@
-.guided-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.guided-grid details {
-  border: 1px solid #33415d;
-  border-radius: 10px;
-  padding: 14px;
-}
-
-.guided-grid summary {
-  cursor: pointer;
-  font-weight: 700;
-  text-transform: capitalize;
-}
-
-.form-group {
-  display: grid;
-  gap: 9px;
-  margin: 12px 0 6px;
-  padding-left: 12px;
-  border-left: 1px solid #2d3a55;
-}
-
-.form-row > label {
-  display: block;
-  margin-bottom: 5px;
-  color: #8e9ab0;
-  font-size: 12px;
-}
-
-.form-row input:not([type="checkbox"]),
-.form-row select {
-  width: min(100%, 620px);
-}
-
-select {
-  background: #0c1324;
-  border: 1px solid #33415d;
-  color: #edf3ff;
-  border-radius: 9px;
-  padding: 9px 12px;
-}
+.config-panel { padding: 0; overflow: hidden; }
+.config-panel > .panel-title, .config-panel > .errors, .config-panel > .section-title { margin-left: 22px; margin-right: 22px; }
+.config-panel > .panel-title { margin-top: 22px; }
+.config-wizard { min-height: 650px; display: grid; grid-template-columns: 235px minmax(0, 1fr); border-top: 1px solid #2b3852; }
+.job-sidebar { position: static; height: auto; padding: 22px 16px; border: 0; border-right: 1px solid #2b3852; background: #0d1527; }
+.job-sidebar-head, .job-toolbar, .wizard-nav { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.job-sidebar-head h3 { margin: 0; }
+.job-sidebar-head button { white-space: nowrap; }
+.job-list { display: grid; gap: 8px; margin-top: 20px; }
+.job-list button { display: grid; gap: 5px; width: 100%; padding: 12px; border: 1px solid transparent; background: #151f34; color: #e8edf7; text-align: left; }
+.job-list button small { overflow: hidden; color: #8190aa; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.job-list button.selected { border-color: #6ed6c3; background: #182b36; }
+.wizard-main { min-width: 0; padding: 22px 26px; }
+.job-toolbar { padding-bottom: 20px; }
+.job-toolbar label { width: min(420px, 100%); }
+button.danger { background: #48232d; color: #ffafbd; }
+button:disabled { cursor: not-allowed; filter: grayscale(.5); opacity: .45; }
+.wizard-steps { display: grid; grid-template-columns: repeat(5, minmax(100px, 1fr)); gap: 0; margin: 0; padding: 17px 0; border-top: 1px solid #293650; border-bottom: 1px solid #293650; list-style: none; }
+.wizard-steps li { position: relative; }
+.wizard-steps li:not(:last-child)::after { position: absolute; z-index: 0; top: 15px; right: -50%; width: 100%; height: 1px; background: #33415d; content: ""; }
+.wizard-steps li.done:not(:last-child)::after { background: #438d81; }
+.wizard-steps button { position: relative; z-index: 1; display: grid; justify-items: center; gap: 6px; width: 100%; padding: 0 4px; background: transparent; color: #7f8ca5; font-size: 11px; }
+.wizard-steps button span { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #40506d; border-radius: 50%; background: #121b2e; color: #9cabc3; }
+.wizard-steps .active button, .wizard-steps .done button { color: #dfe9f7; }
+.wizard-steps .active button span, .wizard-steps .done button span { border-color: #6ed6c3; background: #153a37; color: #83e5d2; }
+.wizard-content { min-height: 440px; padding: 28px 0; }
+.wizard-form { display: grid; gap: 18px; max-width: 880px; }
+.form-intro h3 { margin-bottom: 6px; font-size: 20px; }
+.form-intro p, .wizard-field small { margin: 0; color: #8491a9; }
+.form-intro.subsection { margin-top: 12px; padding-top: 20px; border-top: 1px solid #2b3852; }
+.wizard-field { display: grid; gap: 7px; }
+.wizard-field > span { color: #c3cee0; font-size: 13px; font-weight: 650; }
+.wizard-field input, .wizard-field select { width: 100%; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.field-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.inline-create { display: flex; gap: 8px; align-items: center; }
+.inline-create input { width: min(420px, 100%); }
+.shared-warning { margin: 0; padding: 12px 14px; border-left: 3px solid #ffd477; border-radius: 7px; background: #392f1d; color: #f0dca3; font-size: 13px; }
+.notifier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.notifier-grid > label { padding: 13px; border: 1px solid #33415d; border-radius: 9px; }
+.notifier-grid label span { color: #aebacf; }
+.review-list { display: grid; gap: 0; margin: 0; border: 1px solid #33415d; border-radius: 12px; overflow: hidden; }
+.review-list div { display: grid; grid-template-columns: 170px 1fr; gap: 20px; padding: 13px 16px; border-bottom: 1px solid #293650; }
+.review-list div:last-child { border-bottom: 0; }
+.review-list dt { color: #8190aa; }
+.review-list dd { margin: 0; color: #e3eaf5; }
+.review-ready { display: flex; gap: 14px; align-items: center; padding: 16px; border: 1px solid #27685e; border-radius: 11px; background: #11322f; }
+.review-ready > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #6ed6c3; color: #09201c; font-weight: 900; }
+.review-ready p { margin: 4px 0 0; color: #9fc8c0; font-size: 12px; }
+.wizard-nav { padding-top: 18px; border-top: 1px solid #293650; }
+.wizard-nav > span { color: #7f8ca5; font-size: 12px; }
+.wizard-empty, .wizard-invalid { min-height: 500px; display: grid; place-content: center; justify-items: center; padding: 30px; text-align: center; }
+.wizard-empty p, .wizard-invalid p { max-width: 560px; color: #8491a9; }
+select { background: #0c1324; border: 1px solid #33415d; color: #edf3ff; border-radius: 9px; padding: 9px 12px; }
+@media (max-width: 980px) { .config-wizard { grid-template-columns: 1fr; } .job-sidebar { border-right: 0; border-bottom: 1px solid #2b3852; } .job-list { display: flex; overflow-x: auto; } .job-list button { min-width: 190px; } }
+@media (max-width: 700px) { .wizard-main { padding: 18px 16px; } .job-toolbar { align-items: flex-start; flex-direction: column; } .wizard-steps { grid-template-columns: repeat(5, 58px); overflow-x: auto; } .wizard-steps button { font-size: 0; } .wizard-steps button span { font-size: 11px; } .field-grid, .field-grid.three { grid-template-columns: 1fr; } .inline-create { align-items: stretch; flex-direction: column; } .review-list div { grid-template-columns: 1fr; gap: 4px; } }

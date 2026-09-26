@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import yaml from "js-yaml";
 import "./styles.css";
 import "./guided.css";
+import { ConfigWizard } from "./config-wizard";
 
 type Capability = { mode: "agent" | "hub"; product_version: string; features: string[] };
 type RecordItem = {
@@ -54,7 +55,7 @@ function App() {
 
   return <div className="shell">
     <aside>
-      <div className="brand"><span className="logo">B</span><div><strong>Backuppo</strong><small>{capability.mode} · v{capability.product_version}</small></div></div>
+      <div className="brand"><img className="logo" src="/backuppo-squirrel-192.png" alt="" /><div><strong>Backuppo</strong><small>{capability.mode} · v{capability.product_version}</small></div></div>
       <nav>
         {(capability.mode === "agent" ? [["dashboard", "Panoramica"], ["history", "Storico"], ["config", "Configurazione"]] : [["dashboard", "Siti e clienti"]]).map(([id, label]) =>
           <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}>{label}</button>)}
@@ -126,7 +127,7 @@ function ConfigEditor({ headers, notify }: { headers: Record<string, string>; no
   const [document, setDocument] = useState<ConfigDocument>();
   const [source, setSource] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
-  const [mode, setMode] = useState<"guided" | "yaml">("guided");
+  const [mode, setMode] = useState<"wizard" | "yaml">("wizard");
   const summary = useMemo(() => {
     try {
       const parsed = yaml.load(source) as Record<string, Record<string, unknown>>;
@@ -140,41 +141,16 @@ function ConfigEditor({ headers, notify }: { headers: Record<string, string>; no
   const load = useCallback(() => request<ConfigDocument>("/api/v1/config").then(value => { setDocument(value); setSource(value.yaml); }), []);
   useEffect(() => { load(); }, [load]);
   async function validateOnly() { const result = await request<{ valid: boolean; errors: string[] }>("/api/v1/config/validate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ yaml: source }) }); setErrors(result.errors); notify({ kind: result.valid ? "ok" : "error", text: result.valid ? "Configurazione valida" : "Correggi gli errori evidenziati" }); }
-  async function save() { try { const result = await request<{ revision: string }>("/api/v1/config", { method: "PUT", headers, body: JSON.stringify({ yaml: source, revision: document?.revision }) }); setDocument(previous => previous && ({ ...previous, yaml: source, revision: result.revision })); setErrors([]); notify({ kind: "ok", text: "Configurazione salvata; ora puoi applicarla" }); } catch (error) { notify({ kind: "error", text: (error as Error).message }); } }
+  async function save(applyAfter = false) { try { const result = await request<{ revision: string }>("/api/v1/config", { method: "PUT", headers, body: JSON.stringify({ yaml: source, revision: document?.revision }) }); setDocument(previous => previous && ({ ...previous, yaml: source, revision: result.revision })); setErrors([]); if (applyAfter) await apply(); else notify({ kind: "ok", text: "Configurazione salvata come bozza" }); } catch (error) { notify({ kind: "error", text: (error as Error).message }); } }
   async function apply() { try { const result = await request<{ restart_required: string[] }>("/api/v1/config/apply", { method: "POST", headers }); notify({ kind: "ok", text: result.restart_required.length ? `Applicata; riavvio richiesto per ${result.restart_required.join(", ")}` : "Configurazione applicata al runtime" }); } catch (error) { notify({ kind: "error", text: (error as Error).message }); } }
   async function testNotifier(name: string) { try { await request(`/api/v1/notifiers/${encodeURIComponent(name)}/test`, { method: "POST", headers }); notify({ kind: "ok", text: `Notifier ${name}: test riuscito` }); } catch (error) { notify({ kind: "error", text: (error as Error).message }); } }
   if (!document) return <div className="loader" />;
   return <><section className="metrics"><article><span>Job</span><strong>{summary.jobs}</strong></article><article><span>Destinazioni</span><strong>{summary.destinations}</strong></article><article><span>Notifier</span><strong>{summary.notifiers}</strong></article></section>
-    <section className="panel"><div className="panel-title"><div><h2>Configurazione</h2><p>I valori segreti restano riferimenti a variabili <code>*_env</code>.</p></div><div className="actions"><button className={mode === "guided" ? "" : "secondary"} onClick={() => setMode("guided")}>Form guidato</button><button className={mode === "yaml" ? "" : "secondary"} onClick={() => setMode("yaml")}>YAML</button><button className="secondary" onClick={validateOnly}>Valida</button><button className="secondary" onClick={save}>Salva</button><button onClick={apply}>Applica</button></div></div>
+    <section className="panel config-panel"><div className="panel-title"><div><h2>Configurazione backup</h2><p>Crea tutti i job necessari. I segreti restano riferimenti a variabili <code>*_env</code>.</p></div><div className="actions"><button className={mode === "wizard" ? "" : "secondary"} onClick={() => setMode("wizard")}>Wizard</button><button className={mode === "yaml" ? "" : "secondary"} onClick={() => setMode("yaml")}>YAML avanzato</button><button className="secondary" onClick={validateOnly}>Valida</button><button className="secondary" onClick={() => save(false)}>Salva bozza</button><button onClick={() => save(true)}>Salva e applica</button></div></div>
       {errors.length > 0 && <ul className="errors">{errors.map(error => <li key={error}>{error}</li>)}</ul>}
-      {mode === "yaml" ? <textarea className="editor" spellCheck={false} value={source} onChange={event => setSource(event.target.value)} /> : <GuidedConfig source={source} onChange={setSource} />}
+      {mode === "yaml" ? <textarea className="editor" spellCheck={false} value={source} onChange={event => setSource(event.target.value)} /> : <ConfigWizard source={source} onChange={setSource} notify={notify} />}
       {notifierNames.length > 0 && <div className="panel-title section-title"><div><h3>Test notifier</h3><p>Invia il messaggio di prova tramite la configurazione attiva.</p></div><div className="actions">{notifierNames.map(name => <button className="secondary" key={name} onClick={() => testNotifier(name)}>{name}</button>)}</div></div>}
     </section></>;
-}
-
-function GuidedConfig({ source, onChange }: { source: string; onChange: (value: string) => void }) {
-  let parsed: Record<string, unknown>;
-  try { parsed = (yaml.load(source) as Record<string, unknown>) ?? {}; }
-  catch { return <p className="errors">Il YAML non è analizzabile: passa alla modalità YAML per correggerlo.</p>; }
-
-  function update(path: string[], raw: string | boolean) {
-    const copy = structuredClone(parsed) as Record<string, unknown>;
-    let cursor: Record<string, unknown> = copy;
-    path.slice(0, -1).forEach(key => { cursor = cursor[key] as Record<string, unknown>; });
-    const key = path[path.length - 1];
-    const previous = cursor[key];
-    cursor[key] = typeof previous === "number" ? Number(raw) : Array.isArray(previous) ? String(raw).split(",").map(value => value.trim()).filter(Boolean) : raw;
-    onChange(yaml.dump(copy, { noRefs: true, lineWidth: 110 }));
-  }
-
-  function fields(value: unknown, path: string[]): React.ReactNode {
-    if (value && typeof value === "object" && !Array.isArray(value)) return <div className="form-group">{Object.entries(value as Record<string, unknown>).map(([key, child]) => <div key={key} className="form-row"><label>{key}</label>{fields(child, [...path, key])}</div>)}</div>;
-    if (typeof value === "boolean") return <input type="checkbox" checked={value} onChange={event => update(path, event.target.checked)} />;
-    return <input value={Array.isArray(value) ? value.join(", ") : String(value ?? "")} onChange={event => update(path, event.target.value)} />;
-  }
-
-  const sections = ["jobs", "destinations", "notifiers", "reports", "observability", "api"];
-  return <div className="guided-grid">{sections.filter(section => parsed[section] !== undefined).map(section => <details key={section} open={section === "jobs"}><summary>{section}</summary>{fields(parsed[section], [section])}</details>)}</div>;
 }
 
 function HubConsole({ csrf, notify }: { csrf: string; notify: (n: Notice) => void }) {
