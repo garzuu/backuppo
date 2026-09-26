@@ -15,6 +15,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/backuppo-squirrel-v3.png"]
+    "icon": ["icons/backuppo-squirrel-v3.png", "icons/icon.ico"]
   }
 }
