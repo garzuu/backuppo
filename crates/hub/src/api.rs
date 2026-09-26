@@ -8,14 +8,19 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use backuppo_core::config::NotifierConfig;
 use backuppo_core::hub_protocol::{
-    CommandKind, CommandResult, EventKind, EventPayload, PendingCommand,
+    CommandKind, CommandResult, EventKind, EventPayload, HeartbeatPayload, PendingCommand,
+    PolicyConstraints, PolicyDocument, PolicyEnforcement, SignedPolicy,
 };
 use backuppo_core::model::JobEvent;
+use base64::Engine;
+use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{self, Claims};
 use crate::db::{AgentToken, Command, Customer, Db, NewExecution, Role, Site, UserSummary};
-use crate::web::{APP_CSS, APP_JS, INDEX_HTML, MANIFEST, SERVICE_WORKER};
+use crate::web::{
+    APP_CSS, APP_JS, INDEX_HTML, MANIFEST, SERVICE_WORKER, SQUIRREL_192, SQUIRREL_512,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -28,6 +33,7 @@ pub struct AppState {
     pub notify_on_offline: Arc<Vec<String>>,
     pub notify_on_failure: Arc<Vec<String>>,
     pub browser_csrf: Arc<String>,
+    pub policy_signer: Option<Arc<SigningKey>>,
 }
 
 type ApiError = (StatusCode, String);
@@ -39,6 +45,8 @@ pub fn router(state: AppState) -> Router {
         .route("/app.css", get(app_css))
         .route("/manifest.webmanifest", get(manifest))
         .route("/sw.js", get(service_worker))
+        .route("/backuppo-squirrel-192.png", get(squirrel_192))
+        .route("/backuppo-squirrel-512.png", get(squirrel_512))
         .route("/api/v1/capabilities", get(capabilities))
         .route(
             "/api/v1/session",
@@ -61,6 +69,12 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/commands/pending", get(pending_commands))
         .route("/v1/commands/{id}/result", post(command_result))
+        .route("/v1/policy/current", get(current_policy))
+        .route("/v1/policy/public-key", get(policy_public_key))
+        .route(
+            "/v1/sites/{id}/policies",
+            get(list_policies).post(create_policy),
+        )
         .route(
             "/v1/sites/{id}/tokens",
             get(list_agent_tokens).post(create_agent_token),
@@ -83,6 +97,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/sites/{id}/commands",
             get(list_commands).post(create_command),
+        )
+        .route(
+            "/api/v1/sites/{id}/policies",
+            get(list_policies).post(create_policy),
         )
         .route(
             "/api/v1/sites/{id}/tokens",
@@ -121,9 +139,18 @@ async fn service_worker() -> impl IntoResponse {
     )
 }
 
+async fn squirrel_192() -> impl IntoResponse {
+    ([("content-type", "image/png")], SQUIRREL_192)
+}
+
+async fn squirrel_512() -> impl IntoResponse {
+    ([("content-type", "image/png")], SQUIRREL_512)
+}
+
 #[derive(Serialize)]
 struct Capabilities {
     mode: &'static str,
+    platform: &'static str,
     api_version: &'static str,
     product_version: &'static str,
     features: Vec<&'static str>,
@@ -133,9 +160,17 @@ struct Capabilities {
 async fn capabilities() -> Json<Capabilities> {
     Json(Capabilities {
         mode: "hub",
+        platform: std::env::consts::OS,
         api_version: "v1",
         product_version: env!("CARGO_PKG_VERSION"),
-        features: vec!["customers", "sites", "executions", "commands", "tokens"],
+        features: vec![
+            "customers",
+            "sites",
+            "executions",
+            "commands",
+            "tokens",
+            "signed_policies",
+        ],
         auth: "bearer",
     })
 }
@@ -466,11 +501,20 @@ async fn ingest_event(
 async fn heartbeat(
     State(state): State<AppState>,
     headers: HeaderMap,
+    payload: Option<Json<HeartbeatPayload>>,
 ) -> Result<StatusCode, ApiError> {
     let site = require_agent(&headers, &state.db)?;
+    let payload = payload
+        .map(|Json(value)| value)
+        .unwrap_or(HeartbeatPayload {
+            agent_version: "legacy".into(),
+            os: "unknown".into(),
+            arch: "unknown".into(),
+            capabilities: Vec::new(),
+        });
     state
         .db
-        .record_heartbeat(site.id, now())
+        .record_heartbeat(site.id, now(), &payload)
         .map_err(internal_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -783,6 +827,119 @@ async fn command_result(
     }
 }
 
+// --- policy centralizzate firmate ----------------------------------------
+
+#[derive(Deserialize)]
+struct CreatePolicyRequest {
+    expires_at: i64,
+    enforcement: PolicyEnforcement,
+    #[serde(default)]
+    constraints: PolicyConstraints,
+}
+
+async fn policy_public_key(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let signer = state.policy_signer.as_ref().ok_or((
+        StatusCode::NOT_FOUND,
+        "firma policy non configurata".to_string(),
+    ))?;
+    Ok(Json(serde_json::json!({
+        "algorithm": "Ed25519",
+        "public_key": base64::engine::general_purpose::STANDARD
+            .encode(signer.verifying_key().to_bytes())
+    })))
+}
+
+async fn create_policy(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(site_id): Path<i64>,
+    Json(body): Json<CreatePolicyRequest>,
+) -> Result<(StatusCode, Json<SignedPolicy>), ApiError> {
+    require_browser_csrf(&headers, &state)?;
+    let claims = require_user(&headers, &state.jwt_secret)?;
+    require_admin(&claims)?;
+    state
+        .db
+        .get_site(site_id)
+        .map_err(internal_error)?
+        .ok_or((StatusCode::NOT_FOUND, "sito non trovato".to_string()))?;
+    let issued_at = now();
+    if body.expires_at <= issued_at {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "expires_at deve essere nel futuro".to_string(),
+        ));
+    }
+    let signer = state.policy_signer.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "policy_signing_key_env non configurato".to_string(),
+    ))?;
+    let sequence = state
+        .db
+        .latest_policy_sequence(site_id)
+        .map_err(internal_error)?
+        .saturating_add(1);
+    let document = PolicyDocument {
+        sequence,
+        site_id,
+        issued_at,
+        expires_at: body.expires_at,
+        enforcement: body.enforcement,
+        constraints: body.constraints,
+    };
+    let payload_bytes = serde_json::to_vec(&document).map_err(internal_error)?;
+    let signed = SignedPolicy {
+        payload: base64::engine::general_purpose::STANDARD.encode(&payload_bytes),
+        signature: base64::engine::general_purpose::STANDARD
+            .encode(signer.sign(&payload_bytes).to_bytes()),
+    };
+    let created_by = claims
+        .sub
+        .parse::<i64>()
+        .ok()
+        .and_then(|id| state.db.username_by_id(id).ok().flatten())
+        .unwrap_or(claims.sub);
+    state
+        .db
+        .insert_policy(
+            site_id,
+            sequence,
+            &signed.payload,
+            &signed.signature,
+            &created_by,
+            issued_at,
+            document.expires_at,
+        )
+        .map_err(internal_error)?;
+    Ok((StatusCode::CREATED, Json(signed)))
+}
+
+async fn list_policies(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(site_id): Path<i64>,
+) -> Result<Json<Vec<SignedPolicy>>, ApiError> {
+    require_user(&headers, &state.jwt_secret)?;
+    state
+        .db
+        .list_policies(site_id)
+        .map(Json)
+        .map_err(internal_error)
+}
+
+async fn current_policy(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<Option<SignedPolicy>>), ApiError> {
+    let site = require_agent(&headers, &state.db)?;
+    match state.db.current_policy(site.id).map_err(internal_error)? {
+        Some(policy) => Ok((StatusCode::OK, Json(Some(policy)))),
+        None => Ok((StatusCode::NO_CONTENT, Json(None))),
+    }
+}
+
 // --- esecuzioni -----------------------------------------------------------
 
 async fn list_executions_for_site(
@@ -836,6 +993,7 @@ mod tests {
             notify_on_offline: Arc::new(Vec::new()),
             notify_on_failure: Arc::new(Vec::new()),
             browser_csrf: Arc::new("test-csrf".to_string()),
+            policy_signer: Some(Arc::new(SigningKey::from_bytes(&[9_u8; 32]))),
         }
     }
 
@@ -1097,12 +1255,21 @@ mod tests {
         let (plaintext, hash) = auth::generate_opaque_token();
         state.db.create_agent_token(site.id, &hash, 0).unwrap();
 
-        let result = heartbeat(State(state.clone()), auth_header(&plaintext)).await;
+        let result = heartbeat(
+            State(state.clone()),
+            auth_header(&plaintext),
+            Some(Json(HeartbeatPayload {
+                agent_version: "1.2.3".into(),
+                os: "linux".into(),
+                arch: "x86_64".into(),
+                capabilities: vec!["updates".into()],
+            })),
+        )
+        .await;
         assert_eq!(result.unwrap(), StatusCode::NO_CONTENT);
-        assert_eq!(
-            state.db.get_site(site.id).unwrap().unwrap().status,
-            "online"
-        );
+        let refreshed = state.db.get_site(site.id).unwrap().unwrap();
+        assert_eq!(refreshed.status, "online");
+        assert_eq!(refreshed.agent_version.as_deref(), Some("1.2.3"));
     }
 
     fn user_headers(state: &AppState, name: &str, role: Role) -> HeaderMap {
@@ -1123,6 +1290,44 @@ mod tests {
         let (plaintext, hash) = auth::generate_opaque_token();
         state.db.create_agent_token(site.id, &hash, 0).unwrap();
         (site.id, plaintext)
+    }
+
+    #[tokio::test]
+    async fn admin_publishes_a_signed_policy_scoped_to_the_agent_site() {
+        let state = test_state();
+        let (site_id, agent_token) = site_with_agent(&state, "policy-site");
+        let mut headers = user_headers(&state, "policy-admin", Role::Admin);
+        headers.insert("x-backuppo-csrf", "test-csrf".parse().unwrap());
+        let (_, Json(created)) = create_policy(
+            State(state.clone()),
+            headers,
+            Path(site_id),
+            Json(CreatePolicyRequest {
+                expires_at: now() + 3600,
+                enforcement: PolicyEnforcement::Block,
+                constraints: PolicyConstraints {
+                    require_append_only: true,
+                    require_object_lock: true,
+                    minimum_object_lock_days: Some(30),
+                    require_signed_updates: true,
+                    allow_remote_commands: false,
+                },
+            }),
+        )
+        .await
+        .unwrap();
+        let payload = base64::engine::general_purpose::STANDARD
+            .decode(&created.payload)
+            .unwrap();
+        let document: PolicyDocument = serde_json::from_slice(&payload).unwrap();
+        assert_eq!(document.sequence, 1);
+        assert_eq!(document.site_id, site_id);
+
+        let (status, Json(current)) = current_policy(State(state), auth_header(&agent_token))
+            .await
+            .unwrap();
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(current.unwrap().payload, created.payload);
     }
 
     fn run_request(job: &str) -> Json<CreateCommandRequest> {

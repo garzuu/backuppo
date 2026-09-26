@@ -101,6 +101,7 @@ fn build_config(
         observability: None,
         reports: Vec::new(),
         api: None,
+        updates: None,
     }
 }
 

@@ -27,6 +27,10 @@ jobs:
 
       - name: Build Web UI
         run: npm ci --prefix apps/web && npm run build --prefix apps/web
+      - name: Validate Unix installers
+        run: |
+          sh -n deploy/linux/install-agent.sh deploy/linux/install-hub.sh
+          sh -n deploy/macos/install-agent.sh deploy/macos/install-hub.sh
 
       - uses: Swatinem/rust-cache@v2
 
@@ -50,9 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build container image
-        run: docker build --tag backuppo:ci .
+        run: docker build --tag backuppo-agent:ci -f Dockerfile.agent .
       - name: Smoke test container
-        run: docker run --rm backuppo:ci --version
+        run: docker run --rm backuppo-agent:ci --version
 
   docker-hub:
     runs-on: ubuntu-latest
@@ -95,7 +99,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: platform-${{ matrix.target }}
-      - run: cargo build --locked --release --package backuppo --target ${{ matrix.target }}
+      - name: Build Agent and Hub
+        run: |
+          cargo build --locked --release --package backuppo --target ${{ matrix.target }}
+          cargo build --locked --release --package backuppo-hub --target ${{ matrix.target }}
+      - name: Validate Windows installers
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $parseErrors = @()
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path deploy/windows/install-agent.ps1), [ref]$null, [ref]$parseErrors) | Out-Null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path deploy/windows/install-hub.ps1), [ref]$null, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
       - name: Verify static Linux binary
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: file target/${{ matrix.target }}/release/bkpo | grep -E 'statically linked|static-pie linked'

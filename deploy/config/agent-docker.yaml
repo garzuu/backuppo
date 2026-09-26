@@ -1,0 +1,11 @@
+destinations: {}
+notifiers: {}
+jobs: {}
+reports: []
+observability:
+  history_path: /var/lib/backuppo/history.sqlite
+  status_page: /var/lib/backuppo/status.html
+api:
+  bind: 0.0.0.0:8787
+  # Sicuro solo perché Compose pubblica la porta su 127.0.0.1 dell'host.
+  allow_remote: true

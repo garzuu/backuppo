@@ -1,0 +1,19 @@
+services:
+  agent:
+    image: ghcr.io/garzuu/backuppo-agent:${BACKUPPO_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+      HUB_TOKEN: ${HUB_TOKEN:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+    volumes:
+      - agent-config:/etc/backuppo
+      - agent-data:/var/lib/backuppo
+      - ${BACKUPPO_SOURCE:-./data}:/data/source:ro
+
+volumes:
+  agent-config:
+  agent-data:
+

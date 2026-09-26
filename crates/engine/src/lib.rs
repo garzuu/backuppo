@@ -6,6 +6,7 @@ mod manifest;
 mod naming;
 mod notify;
 mod observability;
+pub mod recovery;
 pub mod report;
 mod restic;
 pub mod retention;
@@ -13,12 +14,13 @@ mod runner;
 pub mod status;
 mod verify;
 
-use backuppo_core::config::Config;
+use backuppo_core::config::{Config, EngineKind};
 use backuppo_core::error::BackupError;
 use backuppo_core::model::Artifact;
 use tracing::warn;
 
 pub use manifest::MANIFEST_FILENAME;
+pub use recovery::{browse, restore, snapshots};
 pub use runner::run_job;
 pub use verify::verify_job;
 
@@ -35,4 +37,19 @@ pub async fn run_and_retain(job_name: &str, config: &Config) -> Result<Artifact,
     }
 
     Ok(artifact)
+}
+
+/// Esegue la manutenzione distruttiva Restic con l'identita amministrativa.
+/// E' intenzionalmente separata dal daemon e dai normali backup.
+pub async fn maintain(job_name: &str, config: &Config) -> Result<(), BackupError> {
+    let job = config
+        .jobs
+        .get(job_name)
+        .ok_or_else(|| BackupError::Other(format!("job '{job_name}' non trovato")))?;
+    if job.engine != EngineKind::Restic {
+        return Err(BackupError::Other(
+            "la manutenzione separata e' disponibile solo per job Restic".into(),
+        ));
+    }
+    restic::maintain(job_name, config, &job.retention).await
 }

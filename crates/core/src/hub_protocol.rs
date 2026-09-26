@@ -7,6 +7,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::JobEvent;
 
+/// Inventario minimo inviato con l'heartbeat. Non contiene configurazione,
+/// percorsi o segreti.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeartbeatPayload {
+    pub agent_version: String,
+    pub os: String,
+    pub arch: String,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
+
 /// Corpo di `POST /v1/events`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventPayload {
@@ -135,6 +146,45 @@ pub struct CommandResult {
     pub ok: bool,
     #[serde(default)]
     pub detail: Option<String>,
+}
+
+/// Busta restituita dall'hub. `payload` contiene il JSON base64 esatto che
+/// e' stato firmato, così la verifica non dipende da una nuova serializzazione.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedPolicy {
+    pub payload: String,
+    pub signature: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyDocument {
+    pub sequence: u64,
+    pub site_id: i64,
+    pub issued_at: i64,
+    pub expires_at: i64,
+    pub enforcement: PolicyEnforcement,
+    pub constraints: PolicyConstraints,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyEnforcement {
+    Audit,
+    Block,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyConstraints {
+    #[serde(default)]
+    pub require_append_only: bool,
+    #[serde(default)]
+    pub require_object_lock: bool,
+    #[serde(default)]
+    pub minimum_object_lock_days: Option<u32>,
+    #[serde(default)]
+    pub require_signed_updates: bool,
+    #[serde(default)]
+    pub allow_remote_commands: bool,
 }
 
 #[cfg(test)]

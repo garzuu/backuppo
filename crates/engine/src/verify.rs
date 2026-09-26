@@ -74,10 +74,10 @@ pub(crate) async fn verify_job_impl(
     let compressed = base.ends_with(".zst");
 
     let passphrase = if encrypted {
-        let pass = runner::resolve_passphrase(job_name, job.encryption.as_ref())?
+        let pass = runner::resolve_encryption(job_name, job.encryption.as_ref())?
             .ok_or_else(|| {
                 BackupError::Other(format!(
-                    "job '{job_name}': l'ultimo backup ('{name}') è cifrato ma manca 'encryption.passphrase_env' in config"
+                    "job '{job_name}': l'ultimo backup ('{name}') è cifrato ma manca la passphrase o chiave age in config"
                 ))
             })?;
         Some(pass)
@@ -101,7 +101,7 @@ pub(crate) async fn verify_job_impl(
             &archive_path_task,
             &extract_dir_task,
             compressed,
-            passphrase_task.as_deref(),
+            passphrase_task.as_ref(),
         )
     })
     .await

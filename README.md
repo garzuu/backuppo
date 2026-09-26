@@ -21,9 +21,15 @@ export BACKUP_PASSPHRASE='una-passphrase-lunga'
 bkpo check --config config.yaml
 bkpo run --config config.yaml --job home-documents
 bkpo verify --config config.yaml --job home-documents
+bkpo snapshots --config config.yaml --job home-documents
+bkpo browse --config config.yaml --job home-documents --snapshot latest
+bkpo restore --config config.yaml --job home-documents --snapshot latest --target ./restore
 ```
 
-Per l'installazione completa vedi il [quickstart](docs/src/content/docs/quickstart.md).
+Agent e Hub sono distribuiti come prodotti distinti per Linux, macOS,
+Windows e Docker. Per scegliere e installare il componente corretto vedi la
+[guida di installazione](docs/src/content/docs/installazione.md); per il primo
+backup continua poi con il [quickstart](docs/src/content/docs/quickstart.md).
 Sono disponibili anche il [riferimento della configurazione](docs/src/content/docs/configuration.md)
 e la [guida al restore manuale](docs/src/content/docs/restore.md).
 
@@ -33,6 +39,12 @@ e la [guida al restore manuale](docs/src/content/docs/restore.md).
 bkpo check       valida la configurazione
 bkpo run         esegue un backup
 bkpo verify      verifica l'ultimo backup
+bkpo snapshots   elenca gli snapshot disponibili
+bkpo browse      sfoglia il contenuto di uno snapshot
+bkpo restore     ripristina in una directory sicura
+bkpo storage-check verifica la policy S3 Object Lock
+bkpo maintain    esegue retention Restic con credenziali amministrative
+bkpo update      controlla e installa release firmate
 bkpo daemon      avvia scheduler, retention e report
 bkpo serve       avvia soltanto API e Web UI locale
 bkpo runs        mostra lo storico locale

@@ -31,6 +31,10 @@ pub struct HubConfig {
     /// Notifica un job/verifica fallita non appena riportata da un agent.
     #[serde(default)]
     pub notify_on_failure: Vec<String>,
+    /// Chiave privata Ed25519 raw (32 byte, base64) per firmare le policy.
+    /// Se assente, le API policy restano disabilitate.
+    #[serde(default)]
+    pub policy_signing_key_env: Option<String>,
 }
 
 fn default_bind() -> String {

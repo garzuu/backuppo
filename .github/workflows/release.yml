@@ -11,6 +11,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  RESTIC_VERSION: 0.19.1
 
 jobs:
   validate:
@@ -32,15 +33,27 @@ jobs:
           - runner: ubuntu-latest
             target: x86_64-unknown-linux-musl
             archive: tar.gz
+            update_target: linux-x86_64
+            restic_asset: restic_0.19.1_linux_amd64.bz2
+            restic_sha256: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
+            update_target: windows-x86_64
+            restic_asset: restic_0.19.1_windows_amd64.zip
+            restic_sha256: da948ad707ed690426473aaba2046cd61f8f90f6f0e7dab6be0d5796531de67d
           - runner: macos-14
             target: x86_64-apple-darwin
             archive: tar.gz
+            update_target: macos-x86_64
+            restic_asset: restic_0.19.1_darwin_amd64.bz2
+            restic_sha256: c38d579622cf602f665234c5a8c315030b6cf70656028fe6dc29a786b60e5f35
           - runner: macos-14
             target: aarch64-apple-darwin
             archive: tar.gz
+            update_target: macos-aarch64
+            restic_asset: restic_0.19.1_darwin_arm64.bz2
+            restic_sha256: 7be0a144ccc377880f294204aa271d76e4b79554b42a751151d425ce6ebac143
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -67,8 +80,28 @@ jobs:
         with:
           key: release-${{ matrix.target }}
 
-      - name: Build release binary
-        run: cargo build --locked --release --package backuppo --target ${{ matrix.target }}
+      - name: Build Agent and Hub release binaries
+        run: |
+          cargo build --locked --release --package backuppo --target ${{ matrix.target }}
+          cargo build --locked --release --package backuppo-hub --target ${{ matrix.target }}
+
+      - name: Download pinned Restic
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl --fail --location --output restic.bz2 "https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}/${{ matrix.restic_asset }}"
+          echo "${{ matrix.restic_sha256 }}  restic.bz2" | shasum -a 256 --check
+          bzip2 -d restic.bz2
+          chmod 755 restic
+
+      - name: Download pinned Restic (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/restic/restic/releases/download/v$env:RESTIC_VERSION/${{ matrix.restic_asset }}" -OutFile restic.zip
+          if ((Get-FileHash restic.zip -Algorithm SHA256).Hash.ToLower() -ne "${{ matrix.restic_sha256 }}") { throw "Restic checksum mismatch" }
+          Expand-Archive restic.zip -DestinationPath restic-dist
+          Copy-Item "restic-dist/restic_${env:RESTIC_VERSION}_windows_amd64.exe" restic.exe
 
       - name: Verify static Linux binary
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -78,31 +111,60 @@ jobs:
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
-          package="backuppo-${GITHUB_REF_NAME}-${{ matrix.target }}"
-          mkdir -p "dist/${package}"
-          cp "target/${{ matrix.target }}/release/bkpo" "dist/${package}/"
-          cp README.md CHANGELOG.md LICENSE-APACHE LICENSE-MIT "dist/${package}/"
-          cp -R examples deploy "dist/${package}/"
-          mkdir -p "dist/${package}/docs/en"
-          cp docs/src/content/docs/*.md "dist/${package}/docs/"
-          cp docs/src/content/docs/en/*.md "dist/${package}/docs/en/"
-          tar -C dist -czf "dist/${package}.tar.gz" "${package}"
-          rm -rf "dist/${package}"
+          agent="backuppo-agent-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          hub="backuppo-hub-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "dist/${agent}/config" "dist/${hub}/config"
+          cp "target/${{ matrix.target }}/release/bkpo" "dist/${agent}/"
+          cp "target/${{ matrix.target }}/release/backuppo-hub" "dist/${hub}/"
+          cp restic "dist/${agent}/"
+          cp "target/${{ matrix.target }}/release/bkpo" "dist/bkpo-${GITHUB_REF_NAME}-${{ matrix.update_target }}"
+          cp README.md CHANGELOG.md LICENSE-APACHE LICENSE-MIT "dist/${agent}/"
+          cp README.md CHANGELOG.md LICENSE-APACHE LICENSE-MIT "dist/${hub}/"
+          cp docs/src/content/docs/installazione.md "dist/${agent}/INSTALL.md"
+          cp docs/src/content/docs/installazione.md "dist/${hub}/INSTALL.md"
+          if [[ "${{ matrix.target }}" == *linux* ]]; then
+            mkdir -p "dist/${agent}/systemd" "dist/${hub}/systemd"
+            cp deploy/linux/install-agent.sh "dist/${agent}/install.sh"
+            cp deploy/linux/install-hub.sh "dist/${hub}/install.sh"
+            cp deploy/config/agent.yaml "dist/${agent}/config/agent.yaml"
+            cp deploy/config/hub.yaml "dist/${hub}/config/hub.yaml"
+            cp deploy/systemd/backuppo.service "dist/${agent}/systemd/"
+            cp deploy/systemd/backuppo-hub.service "dist/${hub}/systemd/"
+          else
+            mkdir -p "dist/${agent}/macos" "dist/${hub}/macos"
+            cp deploy/macos/install-agent.sh "dist/${agent}/install.sh"
+            cp deploy/macos/install-hub.sh "dist/${hub}/install.sh"
+            cp deploy/config/agent-macos.yaml "dist/${agent}/config/agent-macos.yaml"
+            cp deploy/config/hub-macos.yaml "dist/${hub}/config/hub-macos.yaml"
+            cp deploy/macos/com.backuppo.agent.plist "dist/${agent}/macos/"
+            cp deploy/macos/com.backuppo.hub.plist "dist/${hub}/macos/"
+          fi
+          tar -C dist -czf "dist/${agent}.tar.gz" "${agent}"
+          tar -C dist -czf "dist/${hub}.tar.gz" "${hub}"
+          rm -rf "dist/${agent}" "dist/${hub}"
 
       - name: Package Windows binary
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
-          $package = "backuppo-$env:GITHUB_REF_NAME-${{ matrix.target }}"
-          New-Item -ItemType Directory -Path "dist/$package" | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/bkpo.exe" "dist/$package/"
-          Copy-Item README.md,CHANGELOG.md,LICENSE-APACHE,LICENSE-MIT "dist/$package/"
-          Copy-Item examples,deploy -Destination "dist/$package/" -Recurse
-          New-Item -ItemType Directory -Path "dist/$package/docs/en" | Out-Null
-          Copy-Item docs/src/content/docs/*.md -Destination "dist/$package/docs/"
-          Copy-Item docs/src/content/docs/en/*.md -Destination "dist/$package/docs/en/"
-          Compress-Archive -Path "dist/$package" -DestinationPath "dist/$package.zip"
-          Remove-Item "dist/$package" -Recurse -Force
+          $agent = "backuppo-agent-$env:GITHUB_REF_NAME-${{ matrix.target }}"
+          $hub = "backuppo-hub-$env:GITHUB_REF_NAME-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path "dist/$agent/config", "dist/$hub/config" -Force | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/bkpo.exe" "dist/$agent/"
+          Copy-Item "target/${{ matrix.target }}/release/backuppo-hub.exe" "dist/$hub/"
+          Copy-Item restic.exe "dist/$agent/"
+          Copy-Item "target/${{ matrix.target }}/release/bkpo.exe" "dist/bkpo-$env:GITHUB_REF_NAME-${{ matrix.update_target }}.exe"
+          Copy-Item README.md,CHANGELOG.md,LICENSE-APACHE,LICENSE-MIT "dist/$agent/"
+          Copy-Item README.md,CHANGELOG.md,LICENSE-APACHE,LICENSE-MIT "dist/$hub/"
+          Copy-Item docs/src/content/docs/installazione.md "dist/$agent/INSTALL.md"
+          Copy-Item docs/src/content/docs/installazione.md "dist/$hub/INSTALL.md"
+          Copy-Item deploy/windows/install-agent.ps1 "dist/$agent/install.ps1"
+          Copy-Item deploy/windows/install-hub.ps1 "dist/$hub/install.ps1"
+          Copy-Item deploy/config/agent-windows.yaml "dist/$agent/config/"
+          Copy-Item deploy/config/hub-windows.yaml "dist/$hub/config/"
+          Compress-Archive -Path "dist/$agent" -DestinationPath "dist/$agent.zip"
+          Compress-Archive -Path "dist/$hub" -DestinationPath "dist/$hub.zip"
+          Remove-Item "dist/$agent", "dist/$hub" -Recurse -Force
 
       - uses: actions/upload-artifact@v4
         with:
@@ -112,6 +174,16 @@ jobs:
 
   container:
     needs: validate
+    strategy:
+      matrix:
+        include:
+          - product: agent
+            dockerfile: Dockerfile.agent
+            image_suffix: agent
+          - product: hub
+            dockerfile: Dockerfile.hub
+            image_suffix: hub
+    name: container-${{ matrix.product }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,13 +196,14 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}-${{ matrix.image_suffix }}
           tags: |
             type=ref,event=tag
             type=raw,value=latest
       - uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -148,6 +221,34 @@ jobs:
           merge-multiple: true
       - name: Generate checksums
         run: cd dist && sha256sum * > SHA256SUMS
+      - name: Generate signed update manifest
+        env:
+          UPDATE_SIGNING_KEY_B64: ${{ secrets.UPDATE_SIGNING_KEY_B64 }}
+        shell: bash
+        run: |
+          test -n "${UPDATE_SIGNING_KEY_B64}"
+          version="${GITHUB_REF_NAME#v}"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          artifact() {
+            file="$1" target="$2"
+            jq -n --arg target "$target" --arg url "${base}/${file}" \
+              --arg sha256 "$(sha256sum "dist/${file}" | cut -d' ' -f1)" \
+              --argjson size "$(stat -c%s "dist/${file}")" \
+              '{target:$target,url:$url,sha256:$sha256,size:$size}'
+          }
+          jq -n --arg version "$version" --argjson sequence "${GITHUB_RUN_NUMBER}" \
+            --arg restic_version "${RESTIC_VERSION}" \
+            --argjson linux "$(artifact "bkpo-${GITHUB_REF_NAME}-linux-x86_64" linux-x86_64)" \
+            --argjson windows "$(artifact "bkpo-${GITHUB_REF_NAME}-windows-x86_64.exe" windows-x86_64)" \
+            --argjson mac_intel "$(artifact "bkpo-${GITHUB_REF_NAME}-macos-x86_64" macos-x86_64)" \
+            --argjson mac_arm "$(artifact "bkpo-${GITHUB_REF_NAME}-macos-aarch64" macos-aarch64)" \
+            '{sequence:$sequence,channel:"stable",version:$version,restic_version:$restic_version,artifacts:[$linux,$windows,$mac_intel,$mac_arm]}' \
+            > dist/update-stable.json
+          echo "${UPDATE_SIGNING_KEY_B64}" | base64 --decode > update-key.pem
+          openssl pkeyutl -sign -rawin -inkey update-key.pem -in dist/update-stable.json -out update-stable.sig.raw
+          base64 -w0 update-stable.sig.raw > dist/update-stable.json.sig
+          rm -f update-key.pem update-stable.sig.raw
+          (cd dist && sha256sum update-stable.json update-stable.json.sig >> SHA256SUMS)
       - uses: softprops/action-gh-release@v2
         with:
           body_path: RELEASE_NOTES.md

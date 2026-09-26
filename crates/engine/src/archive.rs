@@ -3,7 +3,7 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 
 use age::secrecy::SecretString;
-use age::Identity;
+use age::{Identity, Recipient};
 use backuppo_core::error::BackupError;
 use sha2::{Digest, Sha256};
 
@@ -12,6 +12,12 @@ use sha2::{Digest, Sha256};
 enum Sink {
     Plain(File),
     Encrypted(age::stream::StreamWriter<File>),
+}
+
+#[derive(Debug, Clone)]
+pub enum EncryptionMaterial {
+    Passphrase(String),
+    X25519Identity(String),
 }
 
 impl Write for Sink {
@@ -47,14 +53,29 @@ pub fn build_archive(
     staging: &Path,
     out_path: &Path,
     compress: bool,
-    passphrase: Option<&str>,
+    encryption: Option<&EncryptionMaterial>,
 ) -> Result<(), BackupError> {
     let file = File::create(out_path)?;
 
-    let sink = match passphrase {
-        Some(pass) => {
+    let sink = match encryption {
+        Some(EncryptionMaterial::Passphrase(pass)) => {
             let encryptor =
                 age::Encryptor::with_user_passphrase(SecretString::from(pass.to_string()));
+            let writer = encryptor
+                .wrap_output(file)
+                .map_err(|e| BackupError::Other(format!("errore cifratura age: {e}")))?;
+            Sink::Encrypted(writer)
+        }
+        Some(EncryptionMaterial::X25519Identity(encoded)) => {
+            let identity: age::x25519::Identity = encoded.trim().parse().map_err(|error| {
+                BackupError::Other(format!("chiave privata age non valida: {error}"))
+            })?;
+            let recipient = identity.to_public();
+            let recipients: [&dyn Recipient; 1] = [&recipient];
+            let encryptor =
+                age::Encryptor::with_recipients(recipients.into_iter()).map_err(|error| {
+                    BackupError::Other(format!("recipient age non valido: {error}"))
+                })?;
             let writer = encryptor
                 .wrap_output(file)
                 .map_err(|e| BackupError::Other(format!("errore cifratura age: {e}")))?;
@@ -91,18 +112,29 @@ pub fn extract_archive(
     archive_path: &Path,
     dest: &Path,
     compressed: bool,
-    passphrase: Option<&str>,
+    encryption: Option<&EncryptionMaterial>,
 ) -> Result<(), BackupError> {
     let file = File::open(archive_path)?;
 
-    let reader: Box<dyn Read> = match passphrase {
-        Some(pass) => {
+    let identity: Option<Box<dyn Identity>> = match encryption {
+        Some(EncryptionMaterial::Passphrase(pass)) => Some(Box::new(age::scrypt::Identity::new(
+            SecretString::from(pass.to_string()),
+        ))),
+        Some(EncryptionMaterial::X25519Identity(encoded)) => {
+            let identity: age::x25519::Identity = encoded.trim().parse().map_err(|error| {
+                BackupError::Other(format!("chiave privata age non valida: {error}"))
+            })?;
+            Some(Box::new(identity))
+        }
+        None => None,
+    };
+    let reader: Box<dyn Read> = match identity.as_ref() {
+        Some(identity) => {
             let decryptor = age::Decryptor::new(file)
                 .map_err(|e| BackupError::Other(format!("errore lettura archivio cifrato: {e}")))?;
-            let identity = age::scrypt::Identity::new(SecretString::from(pass.to_string()));
-            let identities: [&dyn Identity; 1] = [&identity];
+            let identities: [&dyn Identity; 1] = [identity.as_ref()];
             let reader = decryptor.decrypt(identities.into_iter()).map_err(|e| {
-                BackupError::Other(format!("passphrase errata o archivio corrotto: {e}"))
+                BackupError::Other(format!("identita' errata o archivio corrotto: {e}"))
             })?;
             Box::new(reader)
         }
@@ -133,4 +165,28 @@ pub fn sha256_file(path: &Path) -> Result<String, BackupError> {
     }
     let digest = hasher.finalize();
     Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use age::secrecy::ExposeSecret;
+
+    #[test]
+    fn x25519_identity_round_trips() {
+        let source = tempfile::tempdir().unwrap();
+        let restored = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let archive = output.path().join("backup.tar.age");
+        std::fs::write(source.path().join("data.txt"), b"secret").unwrap();
+        let identity = age::x25519::Identity::generate();
+        let material =
+            EncryptionMaterial::X25519Identity(identity.to_string().expose_secret().to_string());
+        build_archive(source.path(), &archive, false, Some(&material)).unwrap();
+        extract_archive(&archive, restored.path(), false, Some(&material)).unwrap();
+        assert_eq!(
+            std::fs::read(restored.path().join("data.txt")).unwrap(),
+            b"secret"
+        );
+    }
 }

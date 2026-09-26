@@ -1,0 +1,16 @@
+.recovery-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.recovery-files {
+  margin-top: 1rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .recovery-grid { grid-template-columns: 1fr; }
+}

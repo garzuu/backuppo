@@ -3,7 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use backuppo_core::error::BackupError;
-use backuppo_core::hub_protocol::{CommandResult, EventPayload, PendingCommand};
+use backuppo_core::hub_protocol::{
+    CommandResult, EventPayload, HeartbeatPayload, PendingCommand, SignedPolicy,
+};
 use backuppo_core::model::JobEvent;
 use backuppo_core::secrets::resolve_env;
 use backuppo_core::traits::Notifier;
@@ -94,6 +96,17 @@ pub async fn send_heartbeat(url: &str, token_env: &str) -> Result<(), BackupErro
     let response = client
         .post(format!("{}/v1/heartbeat", url.trim_end_matches('/')))
         .bearer_auth(token)
+        .json(&HeartbeatPayload {
+            agent_version: env!("CARGO_PKG_VERSION").into(),
+            os: std::env::consts::OS.into(),
+            arch: std::env::consts::ARCH.into(),
+            capabilities: vec![
+                "run".into(),
+                "verify".into(),
+                "restore".into(),
+                "updates".into(),
+            ],
+        })
         .send()
         .await
         .map_err(|e| BackupError::Other(format!("errore di rete verso l'hub: {e}")))?;
@@ -129,6 +142,32 @@ pub async fn fetch_commands(
         .json()
         .await
         .map_err(|e| BackupError::Other(format!("risposta comandi dell'hub non valida: {e}")))
+}
+
+/// Scarica la policy corrente assegnata al sito autenticato. `None` significa
+/// che l'hub non ha ancora pubblicato una policy per quel sito.
+pub async fn fetch_policy(url: &str, token_env: &str) -> Result<Option<SignedPolicy>, BackupError> {
+    let token = resolve_env("token_env", token_env)?;
+    let response = Client::new()
+        .get(format!("{}/v1/policy/current", url.trim_end_matches('/')))
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| BackupError::Other(format!("errore di rete verso l'hub: {e}")))?;
+    if response.status() == reqwest::StatusCode::NO_CONTENT {
+        return Ok(None);
+    }
+    if !response.status().is_success() {
+        return Err(BackupError::Other(format!(
+            "l'hub ha risposto {} al ritiro della policy",
+            response.status()
+        )));
+    }
+    response
+        .json()
+        .await
+        .map(Some)
+        .map_err(|e| BackupError::Other(format!("policy dell'hub non valida: {e}")))
 }
 
 /// Riporta all'hub l'esito di un comando ritirato.

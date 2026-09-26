@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use super::{Config, DestinationConfig, EngineKind};
+use super::{Config, DestinationConfig, EncryptionConfig, EngineKind, UpdateChannel};
 
 /// Errore di parsing o validazione della configurazione. Ogni variante porta
 /// il nome del campo/job coinvolto per produrre messaggi leggibili.
@@ -51,8 +51,24 @@ pub enum ConfigError {
     #[error("job '{job}': una destination di tipo 'restic' richiede engine: restic")]
     ResticEngineRequired { job: String },
 
-    #[error("campo 'api.bind' non valido ('{bind}'): usare un indirizzo loopback IP:porta")]
+    #[error("job '{job}': encryption age richiede esattamente uno tra passphrase_env e key_env")]
+    InvalidAgeCredentials { job: String },
+
+    #[error("campo 'api.bind' non valido ('{bind}'): usare un IP:porta loopback oppure impostare api.allow_remote: true")]
     InvalidApiBind { bind: String },
+
+    #[error("campo 'updates.{field}' non valido: {message}")]
+    InvalidUpdate { field: String, message: String },
+
+    #[error("destination '{name}': configurazione Object Lock non valida: {message}")]
+    InvalidObjectLock { name: String, message: String },
+
+    #[error("destination '{name}': credenziali di manutenzione non separate: {message}")]
+    InvalidMaintenanceCredentials { name: String, message: String },
+
+    #[cfg(feature = "hub")]
+    #[error("notifier hub '{name}': configurazione policy non valida: {message}")]
+    InvalidHubPolicy { name: String, message: String },
 }
 
 /// Valida i riferimenti incrociati (destination/notifier) e la sintassi cron
@@ -72,9 +88,108 @@ pub fn validate(config: &Config) -> Result<(), Vec<ConfigError>> {
                 errors.push(ConfigError::SftpMissingAuth { name: name.clone() });
             }
         }
+        if let DestinationConfig::Restic {
+            append_only,
+            environment,
+            maintenance_environment,
+            object_lock,
+            ..
+        } = destination
+        {
+            for (target, admin_source) in maintenance_environment {
+                if environment.get(target) == Some(admin_source) {
+                    errors.push(ConfigError::InvalidMaintenanceCredentials {
+                        name: name.clone(),
+                        message: format!(
+                            "'{target}' usa la stessa variabile per backup e manutenzione"
+                        ),
+                    });
+                }
+            }
+            if let Some(lock) = object_lock {
+                if !append_only {
+                    errors.push(ConfigError::InvalidObjectLock {
+                        name: name.clone(),
+                        message: "richiede append_only: true".into(),
+                    });
+                }
+                if lock.bucket.trim().is_empty()
+                    || lock.region.trim().is_empty()
+                    || lock.access_key_id_env.trim().is_empty()
+                    || lock.secret_access_key_env.trim().is_empty()
+                {
+                    errors.push(ConfigError::InvalidObjectLock {
+                        name: name.clone(),
+                        message: "bucket, region e variabili credenziali sono obbligatori".into(),
+                    });
+                }
+                if lock.minimum_retention_days == 0 {
+                    errors.push(ConfigError::InvalidObjectLock {
+                        name: name.clone(),
+                        message: "minimum_retention_days deve essere maggiore di zero".into(),
+                    });
+                }
+                if let Some(endpoint) = &lock.endpoint {
+                    let local_http = endpoint.starts_with("http://127.0.0.1:")
+                        || endpoint.starts_with("http://localhost:");
+                    if !endpoint.starts_with("https://") && !local_http {
+                        errors.push(ConfigError::InvalidObjectLock {
+                            name: name.clone(),
+                            message: "endpoint deve usare HTTPS (HTTP solo per localhost)".into(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "hub")]
+    for (name, notifier) in &config.notifiers {
+        if let super::NotifierConfig::Hub {
+            policy_public_key,
+            policy_site_id,
+            policy_state_path,
+            policy_poll_seconds,
+            ..
+        } = notifier
+        {
+            if policy_public_key.is_some() != policy_site_id.is_some() {
+                errors.push(ConfigError::InvalidHubPolicy {
+                    name: name.clone(),
+                    message: "policy_public_key e policy_site_id devono essere configurati insieme"
+                        .into(),
+                });
+            }
+            if policy_public_key
+                .as_ref()
+                .is_some_and(|key| key.trim().is_empty())
+            {
+                errors.push(ConfigError::InvalidHubPolicy {
+                    name: name.clone(),
+                    message: "policy_public_key non puo' essere vuota".into(),
+                });
+            }
+            if policy_state_path.trim().is_empty() || *policy_poll_seconds == 0 {
+                errors.push(ConfigError::InvalidHubPolicy {
+                    name: name.clone(),
+                    message: "state path non vuoto e poll maggiore di zero richiesti".into(),
+                });
+            }
+        }
     }
 
     for (job_name, job) in &config.jobs {
+        if let Some(EncryptionConfig::Age {
+            passphrase_env,
+            key_env,
+        }) = &job.encryption
+        {
+            if passphrase_env.is_some() == key_env.is_some() {
+                errors.push(ConfigError::InvalidAgeCredentials {
+                    job: job_name.clone(),
+                });
+            }
+        }
         if !config.destinations.contains_key(&job.destination) {
             errors.push(ConfigError::UnknownDestination {
                 job: job_name.clone(),
@@ -129,11 +244,39 @@ pub fn validate(config: &Config) -> Result<(), Vec<ConfigError>> {
         let valid = api
             .bind
             .parse::<SocketAddr>()
-            .map(|address| address.ip().is_loopback())
-            .unwrap_or(false);
+            .is_ok_and(|address| address.ip().is_loopback() || api.allow_remote);
         if !valid {
             errors.push(ConfigError::InvalidApiBind {
                 bind: api.bind.clone(),
+            });
+        }
+    }
+
+    if let Some(updates) = &config.updates {
+        let local_http = updates.manifest_url.starts_with("http://127.0.0.1:")
+            || updates.manifest_url.starts_with("http://localhost:");
+        if !updates.manifest_url.starts_with("https://") && !local_http {
+            errors.push(ConfigError::InvalidUpdate {
+                field: "manifest_url".into(),
+                message: "usare HTTPS (HTTP e' ammesso solo per localhost)".into(),
+            });
+        }
+        if updates.public_key.trim().is_empty() {
+            errors.push(ConfigError::InvalidUpdate {
+                field: "public_key".into(),
+                message: "la chiave Ed25519 base64 e' obbligatoria".into(),
+            });
+        }
+        if updates.download_dir.trim().is_empty() {
+            errors.push(ConfigError::InvalidUpdate {
+                field: "download_dir".into(),
+                message: "indicare una directory di staging".into(),
+            });
+        }
+        if updates.channel == UpdateChannel::Pinned && updates.pinned_version.is_none() {
+            errors.push(ConfigError::InvalidUpdate {
+                field: "pinned_version".into(),
+                message: "obbligatoria quando channel e' pinned".into(),
             });
         }
     }
@@ -320,6 +463,91 @@ jobs:
         assert!(errors
             .iter()
             .any(|error| matches!(error, ConfigError::InvalidApiBind { .. })));
+
+        let container = yaml.replace(
+            "bind: 127.0.0.1:8787",
+            "bind: 0.0.0.0:8787\n  allow_remote: true",
+        );
+        let config = Config::from_yaml(&container).expect("parsing container valido");
+        validate(&config).expect("bind container esplicitamente autorizzato");
+    }
+
+    #[test]
+    fn validates_update_transport_pinning_and_age_credentials() {
+        let yaml = format!(
+            "{}\nupdates:\n  manifest_url: https://updates.example/stable.json\n  public_key: ZmFrZS1wdWJsaWMta2V5\n  channel: pinned\n  pinned_version: 1.2.3\n",
+            valid_config_yaml()
+        );
+        let config = Config::from_yaml(&yaml).expect("parsing valido");
+        validate(&config).expect("update config valida");
+
+        let invalid = yaml
+            .replace("https://updates.example", "http://updates.example")
+            .replace("  pinned_version: 1.2.3\n", "")
+            .replace(
+                "      passphrase_env: BACKUP_PASSPHRASE",
+                "      passphrase_env: BACKUP_PASSPHRASE\n      key_env: AGE_KEY",
+            );
+        let config = Config::from_yaml(&invalid).expect("parsing valido");
+        let errors = validate(&config).expect_err("config update non sicura");
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ConfigError::InvalidUpdate { field, .. } if field == "manifest_url"
+        )));
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ConfigError::InvalidUpdate { field, .. } if field == "pinned_version"
+        )));
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, ConfigError::InvalidAgeCredentials { .. })));
+    }
+
+    #[test]
+    fn validates_object_lock_and_separate_maintenance_credentials() {
+        let yaml = r#"
+destinations:
+  immutable:
+    type: restic
+    repository: s3:https://s3.example/backups/repository
+    password_env: RESTIC_PASSWORD
+    append_only: true
+    environment:
+      AWS_ACCESS_KEY_ID: BACKUP_ACCESS_KEY
+      AWS_SECRET_ACCESS_KEY: BACKUP_SECRET_KEY
+    maintenance_environment:
+      AWS_ACCESS_KEY_ID: ADMIN_ACCESS_KEY
+      AWS_SECRET_ACCESS_KEY: ADMIN_SECRET_KEY
+    object_lock:
+      bucket: backups
+      region: eu-central-1
+      endpoint: https://s3.example
+      access_key_id_env: LOCK_CHECK_ACCESS_KEY
+      secret_access_key_env: LOCK_CHECK_SECRET_KEY
+      expected_mode: compliance
+      minimum_retention_days: 30
+jobs:
+  protected:
+    engine: restic
+    source: { type: folder, path: /tmp/source }
+    destination: immutable
+    schedule: "0 3 * * *"
+"#;
+        let config = Config::from_yaml(yaml).expect("parsing valido");
+        validate(&config).expect("object lock valido");
+
+        let invalid = yaml
+            .replace("append_only: true", "append_only: false")
+            .replace("ADMIN_SECRET_KEY", "BACKUP_SECRET_KEY")
+            .replace("minimum_retention_days: 30", "minimum_retention_days: 0");
+        let config = Config::from_yaml(&invalid).expect("parsing valido");
+        let errors = validate(&config).expect_err("protezione storage non valida");
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, ConfigError::InvalidObjectLock { .. })));
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, ConfigError::InvalidMaintenanceCredentials { .. })));
     }
 
     #[cfg(feature = "hub")]
@@ -347,6 +575,10 @@ notifiers:
                 queue_path,
                 remote_commands,
                 command_poll_seconds,
+                policy_public_key,
+                policy_site_id,
+                policy_state_path,
+                policy_poll_seconds,
             } => {
                 assert_eq!(url, "https://hub.example.com");
                 assert_eq!(token_env, "HUB_TOKEN");
@@ -355,6 +587,10 @@ notifiers:
                 // I comandi remoti sono opt-in: di default sono spenti.
                 assert!(!*remote_commands);
                 assert_eq!(*command_poll_seconds, 15);
+                assert!(policy_public_key.is_none());
+                assert!(policy_site_id.is_none());
+                assert_eq!(policy_state_path, "backuppo-policy-state.json");
+                assert_eq!(*policy_poll_seconds, 300);
             }
             other => panic!("expected NotifierConfig::Hub, got {other:?}"),
         }

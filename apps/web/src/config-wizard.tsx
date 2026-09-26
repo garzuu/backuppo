@@ -68,7 +68,7 @@ function destinationDefaults(type: string): ObjectMap {
     case "google_drive": return { type, root: "backuppo", access_token_env: "GOOGLE_DRIVE_ACCESS_TOKEN", refresh_token_env: "GOOGLE_DRIVE_REFRESH_TOKEN", retry: { max_times: 3 } };
     case "dropbox": return { type, root: "backuppo", access_token_env: "DROPBOX_ACCESS_TOKEN", refresh_token_env: "DROPBOX_REFRESH_TOKEN", retry: { max_times: 3 } };
     case "one_drive": return { type, root: "backuppo", access_token_env: "ONEDRIVE_ACCESS_TOKEN", refresh_token_env: "ONEDRIVE_REFRESH_TOKEN", retry: { max_times: 3 } };
-    case "restic": return { type, repository: "/var/lib/backuppo/restic", password_env: "RESTIC_PASSWORD", environment: {}, binary: "restic", initialize: true };
+    case "restic": return { type, repository: "/var/lib/backuppo/restic", password_env: "RESTIC_PASSWORD", environment: {}, maintenance_environment: {}, binary: "restic", initialize: true, append_only: false };
     default: return { type: "fs", root: "/var/lib/backuppo/backups" };
   }
 }
@@ -120,13 +120,13 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
     mutate(config => {
       const nextJobs = object(config.jobs);
       const nextDestinations = object(config.destinations);
-      let destination = Object.keys(nextDestinations)[0];
+      let destination = Object.keys(nextDestinations).find(name => text(object(nextDestinations[name]).type) === "restic");
       if (!destination) {
-        destination = "archivio-locale";
-        nextDestinations[destination] = destinationDefaults("fs");
+        destination = uniqueName("repository-restic", Object.keys(nextDestinations));
+        nextDestinations[destination] = destinationDefaults("restic");
       }
       nextJobs[jobName] = {
-        source: sourceDefaults("folder"), destination, engine: "archive", compression: "zstd",
+        source: sourceDefaults("folder"), destination, engine: "restic", compression: "zstd",
         schedule: "0 3 * * *", verify_restore: "weekly", max_backup_age_hours: 48,
         retention: { daily: 7, weekly: 4, monthly: 6 },
         notify: { on_success: [], on_failure: [], on_verify: [] }, pre: [], post: [],
@@ -215,6 +215,9 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
   const destinationName = text(job.destination);
   const destination = object(destinations[destinationName]);
   const destinationType = text(destination.type, "fs");
+  const destinationEnvironment = object(destination.environment);
+  const maintenanceEnvironment = object(destination.maintenance_environment);
+  const objectLock = object(destination.object_lock);
   const retention = object(job.retention);
   const notifyConfig = object(job.notify);
   const notifierNames = Object.keys(object(parsed.config.notifiers));
@@ -250,7 +253,29 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
       {destinationType === "s3" && <><div className="field-grid"><Field label="Bucket" value={text(destination.bucket)} onChange={value => patchDestination({ bucket: value })} /><Field label="Regione" value={text(destination.region)} onChange={value => patchDestination({ region: value || undefined })} /><Field label="Endpoint personalizzato" value={text(destination.endpoint)} onChange={value => patchDestination({ endpoint: value || undefined })} /><Field label="Prefisso nel bucket" value={text(destination.root)} onChange={value => patchDestination({ root: value || undefined })} /></div><div className="field-grid"><Field label="Variabile access key" value={text(destination.access_key_id_env)} onChange={value => patchDestination({ access_key_id_env: value })} /><Field label="Variabile secret key" value={text(destination.secret_access_key_env)} onChange={value => patchDestination({ secret_access_key_env: value })} /></div></>}
       {destinationType === "webdav" && <div className="field-grid"><Field label="URL" value={text(destination.url)} onChange={value => patchDestination({ url: value })} /><Field label="Utente" value={text(destination.user)} onChange={value => patchDestination({ user: value || undefined })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value || undefined })} /></div>}
       {["google_drive", "dropbox", "one_drive"].includes(destinationType) && <div className="field-grid"><Field label="Cartella remota" value={text(destination.root)} onChange={value => patchDestination({ root: value || undefined })} /><Field label="Variabile access token" value={text(destination.access_token_env)} onChange={value => patchDestination({ access_token_env: value })} /><Field label="Variabile refresh token" value={text(destination.refresh_token_env)} onChange={value => patchDestination({ refresh_token_env: value || undefined })} /><Field label="Client ID (opzionale)" value={text(destination.client_id)} onChange={value => patchDestination({ client_id: value || undefined })} /><Field label="Variabile client secret" value={text(destination.client_secret_env)} onChange={value => patchDestination({ client_secret_env: value || undefined })} /></div>}
-      {destinationType === "restic" && <div className="field-grid"><Field label="Repository" value={text(destination.repository)} onChange={value => patchDestination({ repository: value })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value })} /><Field label="Binario Restic" value={text(destination.binary, "restic")} onChange={value => patchDestination({ binary: value })} /></div>}
+      {destinationType === "restic" && <>
+        <div className="field-grid"><Field label="Repository" value={text(destination.repository)} onChange={value => patchDestination({ repository: value })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value })} /><Field label="Binario Restic" value={text(destination.binary, "restic")} onChange={value => patchDestination({ binary: value })} /></div>
+        <label className="check-row"><input type="checkbox" checked={destination.append_only === true} onChange={event => patchDestination({ append_only: event.target.checked, ...(!event.target.checked ? { object_lock: undefined } : {}) })} /> Repository append-only: il daemon non può eseguire retention o prune</label>
+        {destination.append_only === true && <>
+          <div className="form-intro subsection"><h3>Credenziali S3 separate</h3><p>L’identità di backup può scrivere; quella amministrativa viene caricata solo da <code>bkpo maintain</code>.</p></div>
+          <div className="field-grid">
+            <Field label="Access key backup (variabile)" value={text(destinationEnvironment.AWS_ACCESS_KEY_ID)} onChange={value => patchDestination({ environment: { ...destinationEnvironment, AWS_ACCESS_KEY_ID: value } })} />
+            <Field label="Secret key backup (variabile)" value={text(destinationEnvironment.AWS_SECRET_ACCESS_KEY)} onChange={value => patchDestination({ environment: { ...destinationEnvironment, AWS_SECRET_ACCESS_KEY: value } })} />
+            <Field label="Access key amministrativa (variabile)" value={text(maintenanceEnvironment.AWS_ACCESS_KEY_ID)} onChange={value => patchDestination({ maintenance_environment: { ...maintenanceEnvironment, AWS_ACCESS_KEY_ID: value } })} />
+            <Field label="Secret key amministrativa (variabile)" value={text(maintenanceEnvironment.AWS_SECRET_ACCESS_KEY)} onChange={value => patchDestination({ maintenance_environment: { ...maintenanceEnvironment, AWS_SECRET_ACCESS_KEY: value } })} />
+          </div>
+          <label className="check-row"><input type="checkbox" checked={destination.object_lock != null} onChange={event => patchDestination({ object_lock: event.target.checked ? { bucket: "backups", region: "eu-central-1", access_key_id_env: "S3_LOCK_CHECK_ACCESS_KEY", secret_access_key_env: "S3_LOCK_CHECK_SECRET_KEY", expected_mode: "compliance", minimum_retention_days: 30 } : undefined })} /> Verifica S3 Object Lock prima della messa in produzione</label>
+          {destination.object_lock != null && <div className="field-grid">
+            <Field label="Bucket Object Lock" value={text(objectLock.bucket)} onChange={value => patchDestination({ object_lock: { ...objectLock, bucket: value } })} />
+            <Field label="Regione" value={text(objectLock.region)} onChange={value => patchDestination({ object_lock: { ...objectLock, region: value } })} />
+            <Field label="Endpoint S3 (opzionale)" value={text(objectLock.endpoint)} onChange={value => patchDestination({ object_lock: { ...objectLock, endpoint: value || undefined } })} />
+            <SelectField label="Modalità minima" value={text(objectLock.expected_mode, "compliance")} onChange={value => patchDestination({ object_lock: { ...objectLock, expected_mode: value } })}><option value="compliance">Compliance</option><option value="governance">Governance</option></SelectField>
+            <Field label="Retention minima (giorni)" type="number" value={number(objectLock.minimum_retention_days, 30)} onChange={value => patchDestination({ object_lock: { ...objectLock, minimum_retention_days: Number(value) } })} />
+            <Field label="Access key verifica (variabile)" value={text(objectLock.access_key_id_env)} onChange={value => patchDestination({ object_lock: { ...objectLock, access_key_id_env: value } })} />
+            <Field label="Secret key verifica (variabile)" value={text(objectLock.secret_access_key_env)} onChange={value => patchDestination({ object_lock: { ...objectLock, secret_access_key_env: value } })} />
+          </div>}
+        </>}
+      </>}
     </div>;
   }
 

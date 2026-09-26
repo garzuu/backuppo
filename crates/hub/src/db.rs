@@ -73,6 +73,9 @@ pub struct Site {
     pub status: String,
     pub last_heartbeat_at: Option<i64>,
     pub last_event_at: Option<i64>,
+    pub agent_version: Option<String>,
+    pub agent_platform: Option<String>,
+    pub agent_capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -137,7 +140,8 @@ impl Db {
     }
 
     fn initialize(&self) -> Result<()> {
-        self.connect()?
+        let connection = self.connect()?;
+        connection
             .execute_batch(
                 "PRAGMA journal_mode = WAL;
                  CREATE TABLE IF NOT EXISTS customers (
@@ -151,6 +155,9 @@ impl Db {
                     status TEXT NOT NULL DEFAULT 'unknown',
                     last_heartbeat_at INTEGER,
                     last_event_at INTEGER,
+                    agent_version TEXT,
+                    agent_platform TEXT,
+                    agent_capabilities TEXT,
                     UNIQUE(customer_id, name)
                  );
                  CREATE TABLE IF NOT EXISTS agent_tokens (
@@ -197,12 +204,27 @@ impl Db {
                     finished_at INTEGER,
                     detail TEXT
                  );
+                 CREATE TABLE IF NOT EXISTS policies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    site_id INTEGER NOT NULL REFERENCES sites(id),
+                    sequence INTEGER NOT NULL,
+                    payload TEXT NOT NULL,
+                    signature TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    UNIQUE(site_id, sequence)
+                 );
                  CREATE INDEX IF NOT EXISTS commands_site_id ON commands(site_id, id DESC);
+                 CREATE INDEX IF NOT EXISTS policies_site_id ON policies(site_id, sequence DESC);
                  CREATE INDEX IF NOT EXISTS executions_site_id ON executions(site_id, id DESC);
                  CREATE INDEX IF NOT EXISTS agent_tokens_hash ON agent_tokens(token_hash);
                  CREATE INDEX IF NOT EXISTS refresh_tokens_hash ON refresh_tokens(token_hash);",
             )
             .context("inizializzazione schema hub")?;
+        ensure_column(&connection, "sites", "agent_version", "TEXT")?;
+        ensure_column(&connection, "sites", "agent_platform", "TEXT")?;
+        ensure_column(&connection, "sites", "agent_capabilities", "TEXT")?;
         Ok(())
     }
 
@@ -247,13 +269,17 @@ impl Db {
             status: "unknown".to_string(),
             last_heartbeat_at: None,
             last_event_at: None,
+            agent_version: None,
+            agent_platform: None,
+            agent_capabilities: Vec::new(),
         })
     }
 
     pub fn list_sites(&self) -> Result<Vec<Site>> {
         let connection = self.connect()?;
         let mut statement = connection.prepare(
-            "SELECT id, customer_id, name, status, last_heartbeat_at, last_event_at
+            "SELECT id, customer_id, name, status, last_heartbeat_at, last_event_at,
+                    agent_version, agent_platform, agent_capabilities
              FROM sites ORDER BY name ASC",
         )?;
         let rows = statement.query_map([], site_from_row)?;
@@ -264,7 +290,8 @@ impl Db {
         let connection = self.connect()?;
         connection
             .query_row(
-                "SELECT id, customer_id, name, status, last_heartbeat_at, last_event_at
+                "SELECT id, customer_id, name, status, last_heartbeat_at, last_event_at,
+                        agent_version, agent_platform, agent_capabilities
                  FROM sites WHERE id = ?1",
                 [id],
                 site_from_row,
@@ -278,7 +305,8 @@ impl Db {
     pub fn sites_overdue(&self, threshold: i64) -> Result<Vec<Site>> {
         let connection = self.connect()?;
         let mut statement = connection.prepare(
-            "SELECT id, customer_id, name, status, last_heartbeat_at, last_event_at
+            "SELECT id, customer_id, name, status, last_heartbeat_at, last_event_at,
+                    agent_version, agent_platform, agent_capabilities
              FROM sites
              WHERE status != 'offline'
                AND last_heartbeat_at IS NOT NULL
@@ -296,10 +324,19 @@ impl Db {
         Ok(())
     }
 
-    pub fn record_heartbeat(&self, site_id: i64, at: i64) -> Result<()> {
+    pub fn record_heartbeat(
+        &self,
+        site_id: i64,
+        at: i64,
+        payload: &backuppo_core::hub_protocol::HeartbeatPayload,
+    ) -> Result<()> {
+        let capabilities = serde_json::to_string(&payload.capabilities)?;
+        let platform = format!("{}-{}", payload.os, payload.arch);
         self.connect()?.execute(
-            "UPDATE sites SET status = 'online', last_heartbeat_at = ?2 WHERE id = ?1",
-            params![site_id, at],
+            "UPDATE sites SET status = 'online', last_heartbeat_at = ?2,
+                    agent_version = ?3, agent_platform = ?4, agent_capabilities = ?5
+             WHERE id = ?1",
+            params![site_id, at, payload.agent_version, platform, capabilities],
         )?;
         Ok(())
     }
@@ -464,13 +501,91 @@ impl Db {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
+    // --- policy firmate ---------------------------------------------------
+
+    pub fn latest_policy_sequence(&self, site_id: i64) -> Result<u64> {
+        let value = self.connect()?.query_row(
+            "SELECT COALESCE(MAX(sequence), 0) FROM policies WHERE site_id = ?1",
+            [site_id],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(value.max(0) as u64)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_policy(
+        &self,
+        site_id: i64,
+        sequence: u64,
+        payload: &str,
+        signature: &str,
+        created_by: &str,
+        created_at: i64,
+        expires_at: i64,
+    ) -> Result<()> {
+        self.connect()?.execute(
+            "INSERT INTO policies
+             (site_id, sequence, payload, signature, created_by, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                site_id,
+                i64::try_from(sequence)?,
+                payload,
+                signature,
+                created_by,
+                created_at,
+                expires_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn current_policy(
+        &self,
+        site_id: i64,
+    ) -> Result<Option<backuppo_core::hub_protocol::SignedPolicy>> {
+        self.connect()?
+            .query_row(
+                "SELECT payload, signature FROM policies
+                 WHERE site_id = ?1 ORDER BY sequence DESC LIMIT 1",
+                [site_id],
+                |row| {
+                    Ok(backuppo_core::hub_protocol::SignedPolicy {
+                        payload: row.get(0)?,
+                        signature: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .context("lettura policy corrente")
+    }
+
+    pub fn list_policies(
+        &self,
+        site_id: i64,
+    ) -> Result<Vec<backuppo_core::hub_protocol::SignedPolicy>> {
+        let connection = self.connect()?;
+        let mut statement = connection.prepare(
+            "SELECT payload, signature FROM policies
+             WHERE site_id = ?1 ORDER BY sequence DESC LIMIT 50",
+        )?;
+        let rows = statement.query_map([site_id], |row| {
+            Ok(backuppo_core::hub_protocol::SignedPolicy {
+                payload: row.get(0)?,
+                signature: row.get(1)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
     /// Sito associato a un token agent attivo (non revocato), per hash.
     pub fn site_for_agent_token(&self, token_hash: &str) -> Result<Option<Site>> {
         let connection = self.connect()?;
         connection
             .query_row(
                 "SELECT sites.id, sites.customer_id, sites.name, sites.status,
-                        sites.last_heartbeat_at, sites.last_event_at
+                        sites.last_heartbeat_at, sites.last_event_at,
+                        sites.agent_version, sites.agent_platform, sites.agent_capabilities
                  FROM agent_tokens
                  JOIN sites ON sites.id = agent_tokens.site_id
                  WHERE agent_tokens.token_hash = ?1 AND agent_tokens.revoked_at IS NULL",
@@ -631,7 +746,27 @@ fn site_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Site> {
         status: row.get(3)?,
         last_heartbeat_at: row.get(4)?,
         last_event_at: row.get(5)?,
+        agent_version: row.get(6)?,
+        agent_platform: row.get(7)?,
+        agent_capabilities: row
+            .get::<_, Option<String>>(8)?
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_default(),
     })
+}
+
+fn ensure_column(connection: &Connection, table: &str, column: &str, sql_type: &str) -> Result<()> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table})"))?;
+    let names = statement
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if !names.iter().any(|name| name == column) {
+        connection.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {sql_type}"),
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 fn execution_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Execution> {
@@ -666,6 +801,15 @@ fn command_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Command> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn heartbeat_payload() -> backuppo_core::hub_protocol::HeartbeatPayload {
+        backuppo_core::hub_protocol::HeartbeatPayload {
+            agent_version: "1.2.3".into(),
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            capabilities: vec!["updates".into()],
+        }
+    }
 
     fn open_temp() -> (tempfile::TempDir, Db) {
         let temp = tempfile::tempdir().unwrap();
@@ -708,7 +852,8 @@ mod tests {
         let customer = db.create_customer("Acme").unwrap();
         let site = db.create_site(customer.id, "sede-1").unwrap();
 
-        db.record_heartbeat(site.id, 1_000).unwrap();
+        db.record_heartbeat(site.id, 1_000, &heartbeat_payload())
+            .unwrap();
         let refreshed = db.get_site(site.id).unwrap().unwrap();
         assert_eq!(refreshed.status, "online");
         assert_eq!(refreshed.last_heartbeat_at, Some(1_000));
@@ -722,8 +867,10 @@ mod tests {
         let fresh = db.create_site(customer.id, "fresh").unwrap();
         let never_seen = db.create_site(customer.id, "never-seen").unwrap();
 
-        db.record_heartbeat(stale.id, 1_000).unwrap();
-        db.record_heartbeat(fresh.id, 5_000).unwrap();
+        db.record_heartbeat(stale.id, 1_000, &heartbeat_payload())
+            .unwrap();
+        db.record_heartbeat(fresh.id, 5_000, &heartbeat_payload())
+            .unwrap();
         let _ = never_seen; // nessun heartbeat: last_heartbeat_at resta NULL
 
         let overdue = db.sites_overdue(2_000).unwrap();

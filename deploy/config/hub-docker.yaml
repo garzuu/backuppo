@@ -1,0 +1,10 @@
+bind: 0.0.0.0:8080
+database_path: /var/lib/backuppo-hub/hub.sqlite
+jwt_secret_env: HUB_JWT_SECRET
+policy_signing_key_env: HUB_POLICY_SIGNING_KEY
+access_token_minutes: 15
+refresh_token_days: 30
+offline_after_minutes: 15
+notifiers: {}
+notify_on_offline: []
+notify_on_failure: []

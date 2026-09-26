@@ -43,11 +43,27 @@ destinations:
   #   client_id: application-client-id
   #   client_secret_env: DRIVE_CLIENT_SECRET
 
-  # Repository incrementale/deduplicato, usato da job con engine: restic.
-  # incremental:
-  #   type: restic
-  #   repository: /var/backups/backuppo-restic
-  #   password_env: RESTIC_PASSWORD
+  # Motore predefinito per i nuovi job: snapshot incrementali e deduplicati.
+  incremental:
+    type: restic
+    repository: /var/backups/backuppo-restic
+    password_env: RESTIC_PASSWORD
+    append_only: false
+    # Per un repository S3 immutabile usare append_only: true e identita
+    # separate. Verificare poi la policy con `bkpo storage-check`.
+    # environment:
+    #   AWS_ACCESS_KEY_ID: S3_BACKUP_ACCESS_KEY
+    #   AWS_SECRET_ACCESS_KEY: S3_BACKUP_SECRET_KEY
+    # maintenance_environment:
+    #   AWS_ACCESS_KEY_ID: S3_ADMIN_ACCESS_KEY
+    #   AWS_SECRET_ACCESS_KEY: S3_ADMIN_SECRET_KEY
+    # object_lock:
+    #   bucket: my-backups
+    #   region: eu-central-1
+    #   access_key_id_env: S3_LOCK_CHECK_ACCESS_KEY
+    #   secret_access_key_env: S3_LOCK_CHECK_SECRET_KEY
+    #   expected_mode: compliance
+    #   minimum_retention_days: 30
 
 notifiers:
   ops-telegram:
@@ -89,6 +105,11 @@ notifiers:
   #   # Opt-in: ritira dall'hub "esegui ora"/"verifica ora" (solo job di questa config).
   #   remote_commands: false
   #   command_poll_seconds: 15
+  #   # Recuperabile da GET /v1/policy/public-key sull'hub.
+  #   policy_public_key: BASE64_ED25519_PUBLIC_KEY
+  #   policy_site_id: 1
+  #   policy_state_path: /var/lib/backuppo/policy-state.json
+  #   policy_poll_seconds: 300
 
 observability:
   history_path: /var/lib/backuppo/history.sqlite
@@ -96,6 +117,16 @@ observability:
 
 api:
   bind: 127.0.0.1:8787
+
+# Aggiornamenti firmati. Inserire la chiave pubblica pubblicata dal progetto.
+# updates:
+#   manifest_url: https://github.com/garzuu/backuppo/releases/latest/download/update-stable.json
+#   public_key: BASE64_ED25519_PUBLIC_KEY
+#   recovery_public_keys: []
+#   channel: stable
+#   download_dir: /var/lib/backuppo/updates
+#   install_mode: standalone # notify | standalone | package | docker
+#   auto_download: false
 
 reports:
   # Report settimanale ogni lunedì alle 08:00 sugli ultimi sette giorni.
@@ -112,11 +143,8 @@ jobs:
       exclude:
         - "*.tmp"
         - "node_modules/"
-    destination: local-nas
-    compression: zstd
-    encryption:
-      type: age
-      passphrase_env: BACKUP_PASSPHRASE
+    destination: incremental
+    engine: restic
     schedule: "0 3 * * *" # ogni giorno alle 03:00
     verify_restore: daily
     max_backup_age_hours: 26 # allarme se l'ultimo backup ha più di 26h
@@ -144,11 +172,8 @@ jobs:
       password_env: POSTGRES_PASSWORD
       database: app
       container: app-postgres
-    destination: local-nas
-    compression: zstd
-    encryption:
-      type: age
-      passphrase_env: BACKUP_PASSPHRASE
+    destination: incremental
+    engine: restic
     schedule: "30 3 * * *"
     verify_restore: weekly
     pre:

@@ -1,0 +1,10 @@
+destinations: {}
+notifiers: {}
+jobs: {}
+reports: []
+observability:
+  history_path: /Library/Application Support/Backuppo/history.sqlite
+  status_page: /Library/Application Support/Backuppo/status.html
+api:
+  bind: 127.0.0.1:8787
+

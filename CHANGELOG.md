@@ -4,7 +4,22 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
-- Motore Restic opzionale per snapshot incrementali e deduplicati.
+- Il wizard crea repository e job Restic per default, con binario Restic 0.19.1
+  incluso nelle release e nell'immagine container.
+- Ripristino completo o selettivo da CLI, API e Web UI, con navigazione degli
+  snapshot, dry-run e protezione esplicita contro la sovrascrittura.
+- Aggiornamenti firmati Ed25519 con canali stable/beta/pinned, verifica di hash e
+  dimensione, protezione anti-rollback, staging atomico e rollback del binario.
+- Modalita Restic append-only, che impedisce all'agent di eseguire retention e
+  prune sul repository protetto.
+- Verifica online S3 Object Lock e manutenzione Restic manuale con credenziali
+  amministrative isolate da quelle usate dal daemon.
+- Cifratura age con identita X25519 letta da variabile d'ambiente, oltre alla
+  passphrase gia supportata.
+- Inventario agent nel hub con versione, piattaforma e capability, mantenendo la
+  compatibilita con gli agent precedenti.
+- Policy di sicurezza per sito firmate Ed25519, con scadenza, anti-rollback e
+  modalita audit/block applicata a scheduler, UI e comandi remoti.
 - API e Web UI locale con stato, storico e avvio manuale dei job.
 - Destinazioni Google Drive, Dropbox e OneDrive tramite OAuth.
 - Sorgenti per immagini disco e VM libvirt spente.

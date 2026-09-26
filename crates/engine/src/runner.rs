@@ -91,26 +91,26 @@ async fn run_job_impl(
     .map_err(|e| BackupError::Other(format!("task di manifest interrotto: {e}")))??;
 
     let compress = !matches!(job.compression, Some(Compression::None));
-    let passphrase = resolve_passphrase(job_name, job.encryption.as_ref())?;
+    let encryption = resolve_encryption(job_name, job.encryption.as_ref())?;
 
     let mut filename = format!("{job_name}-{}.tar", unix_timestamp());
     if compress {
         filename.push_str(".zst");
     }
-    if passphrase.is_some() {
+    if encryption.is_some() {
         filename.push_str(".age");
     }
 
     let archive_path = staging_root.path().join(&filename);
     let raw_path = raw.path.clone();
     let archive_path_for_task = archive_path.clone();
-    let passphrase_for_task = passphrase.clone();
+    let encryption_for_task = encryption.clone();
     tokio::task::spawn_blocking(move || {
         archive::build_archive(
             &raw_path,
             &archive_path_for_task,
             compress,
-            passphrase_for_task.as_deref(),
+            encryption_for_task.as_ref(),
         )
     })
     .await
@@ -242,23 +242,27 @@ async fn run_hooks(kind: &str, hooks: &[String]) -> Result<(), BackupError> {
     Ok(())
 }
 
-/// Risolve la passphrase di cifratura dalla config del job, se presente.
-/// MVP: supporta solo `age` con `passphrase_env` (le chiavi asimmetriche
-/// sono fuori scope per questa fase).
-pub(crate) fn resolve_passphrase(
+/// Risolve il materiale di cifratura dalla config senza conservarlo su disco.
+pub(crate) fn resolve_encryption(
     job_name: &str,
     encryption: Option<&EncryptionConfig>,
-) -> Result<Option<String>, BackupError> {
+) -> Result<Option<archive::EncryptionMaterial>, BackupError> {
     match encryption {
         None | Some(EncryptionConfig::None) => Ok(None),
-        Some(EncryptionConfig::Age { passphrase_env: Some(var), .. }) => {
-            Ok(Some(resolve_env("encryption.passphrase_env", var)?))
-        }
-        Some(EncryptionConfig::Age { key_env: Some(_), .. }) => Err(BackupError::Other(format!(
-            "job '{job_name}': cifratura age con 'key_env' non ancora supportata (solo 'passphrase_env' in questa fase)"
+        Some(EncryptionConfig::Age {
+            passphrase_env: Some(var),
+            ..
+        }) => Ok(Some(archive::EncryptionMaterial::Passphrase(resolve_env(
+            "encryption.passphrase_env",
+            var,
+        )?))),
+        Some(EncryptionConfig::Age {
+            key_env: Some(var), ..
+        }) => Ok(Some(archive::EncryptionMaterial::X25519Identity(
+            resolve_env("encryption.key_env", var)?,
         ))),
         Some(EncryptionConfig::Age { .. }) => Err(BackupError::Other(format!(
-            "job '{job_name}': encryption 'age' richiede 'passphrase_env'"
+            "job '{job_name}': encryption 'age' richiede 'passphrase_env' oppure 'key_env'"
         ))),
     }
 }

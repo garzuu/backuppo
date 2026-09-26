@@ -46,6 +46,7 @@ fn build_config(dst: &std::path::Path, retention: Retention) -> Config {
         observability: None,
         reports: Vec::new(),
         api: None,
+        updates: None,
     }
 }
 

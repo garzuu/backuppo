@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 /// Il risultato della preparazione di un `Source`: i dati pronti per essere
 /// caricati su una `Destination`.
 #[derive(Debug, Clone)]
@@ -8,6 +10,62 @@ pub struct Artifact {
     pub bytes: u64,
     pub files: u64,
     pub checksum: String,
+}
+
+/// Riferimento uniforme a un backup, indipendente dal motore che lo ha
+/// prodotto. `id` e' il nome dell'oggetto per gli archivi e lo snapshot ID
+/// per Restic.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BackupRef {
+    pub job: String,
+    pub engine: String,
+    pub id: String,
+    pub created_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
+}
+
+/// Elemento mostrato durante la navigazione del contenuto di un backup.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BackupEntry {
+    pub path: String,
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OverwritePolicy {
+    Never,
+    Always,
+}
+
+/// Richiesta di restore condivisa da CLI, API locale e futuro hub.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RestoreRequest {
+    /// Snapshot ID/nome archivio oppure `latest`.
+    pub snapshot: String,
+    pub target: PathBuf,
+    #[serde(default)]
+    pub include: Vec<String>,
+    #[serde(default)]
+    pub dry_run: bool,
+    #[serde(default = "default_overwrite_policy")]
+    pub overwrite: OverwritePolicy,
+}
+
+fn default_overwrite_policy() -> OverwritePolicy {
+    OverwritePolicy::Never
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RestoreResult {
+    pub snapshot: String,
+    pub target: PathBuf,
+    pub files: u64,
+    pub bytes: u64,
+    pub dry_run: bool,
 }
 
 /// Evento emesso dall'engine durante l'esecuzione di un job, inoltrato ai

@@ -12,7 +12,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use backuppo_core::config::{validate, Config};
-use backuppo_core::model::JobEvent;
+use backuppo_core::model::{BackupEntry, BackupRef, JobEvent, RestoreRequest, RestoreResult};
 use backuppo_engine::history::{ExecutionRecord, HistoryStore};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{watch, Mutex};
@@ -42,6 +42,7 @@ pub(crate) struct RuntimeState {
     locks: JobLocks,
     reload: Option<watch::Sender<Arc<Config>>>,
     mode: RuntimeMode,
+    policy_violation: Arc<RwLock<Option<String>>>,
 }
 
 impl RuntimeState {
@@ -52,12 +53,27 @@ impl RuntimeState {
         reload: Option<watch::Sender<Arc<Config>>>,
         mode: RuntimeMode,
     ) -> Self {
+        #[cfg(feature = "hub")]
+        let policy_violation = config
+            .notifiers
+            .values()
+            .find_map(|notifier| match notifier {
+                backuppo_core::config::NotifierConfig::Hub {
+                    policy_public_key: Some(_),
+                    policy_site_id: Some(_),
+                    ..
+                } => Some("in attesa della prima policy firmata".to_string()),
+                _ => None,
+            });
+        #[cfg(not(feature = "hub"))]
+        let policy_violation = None;
         Self {
             config: Arc::new(RwLock::new(config)),
             config_path: config_path.map(Arc::new),
             locks,
             reload,
             mode,
+            policy_violation: Arc::new(RwLock::new(policy_violation)),
         }
     }
 
@@ -77,6 +93,26 @@ impl RuntimeState {
         *self.config.write().expect("runtime config poisoned") = Arc::clone(&config);
         if let Some(reload) = &self.reload {
             let _ = reload.send(config);
+        }
+    }
+
+    pub(crate) fn policy_gate(&self) -> Arc<RwLock<Option<String>>> {
+        Arc::clone(&self.policy_violation)
+    }
+
+    fn enforce_policy(&self) -> Result<(), ApiError> {
+        match self
+            .policy_violation
+            .read()
+            .expect("policy gate poisoned")
+            .as_ref()
+        {
+            Some(reason) => Err(ApiError::new(
+                StatusCode::PRECONDITION_FAILED,
+                "policy_blocked",
+                reason,
+            )),
+            None => Ok(()),
         }
     }
 }
@@ -132,6 +168,7 @@ impl IntoResponse for ApiError {
 #[derive(Serialize)]
 struct Capabilities {
     mode: &'static str,
+    platform: &'static str,
     api_version: &'static str,
     product_version: &'static str,
     features: Vec<&'static str>,
@@ -149,6 +186,8 @@ struct RuntimeResponse {
     jobs: usize,
     reports: usize,
     config_path: Option<String>,
+    policy_blocked: bool,
+    policy_reason: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -170,6 +209,16 @@ struct RunResponse {
 struct RunsQuery {
     #[serde(default = "default_limit")]
     limit: usize,
+}
+
+#[derive(Deserialize)]
+struct BrowseQuery {
+    #[serde(default = "default_latest")]
+    snapshot: String,
+}
+
+fn default_latest() -> String {
+    "latest".into()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -236,6 +285,13 @@ struct ApplyResponse {
     restart_required: Vec<&'static str>,
 }
 
+#[derive(Serialize)]
+struct UpdateActionResponse {
+    status: crate::updater::UpdateStatus,
+    detail: String,
+    restart_required: bool,
+}
+
 fn default_limit() -> usize {
     50
 }
@@ -290,6 +346,8 @@ fn router(state: ApiState) -> Router {
         .route("/app.css", get(app_css))
         .route("/manifest.webmanifest", get(manifest))
         .route("/sw.js", get(service_worker))
+        .route("/backuppo-squirrel-192.png", get(squirrel_192))
+        .route("/backuppo-squirrel-512.png", get(squirrel_512))
         .route("/api/v1/capabilities", get(capabilities))
         .route("/api/v1/session", get(session))
         .route("/api/v1/runtime", get(runtime_status))
@@ -298,12 +356,20 @@ fn router(state: ApiState) -> Router {
         .route("/api/v1/runs/{id}", get(run_detail))
         .route("/api/v1/jobs/{job}/run", post(run_job_legacy))
         .route("/api/v1/jobs/{job}/actions", post(start_action))
+        .route("/api/v1/jobs/{job}/snapshots", get(job_snapshots))
+        .route("/api/v1/jobs/{job}/browse", get(job_browse))
+        .route("/api/v1/jobs/{job}/restore", post(job_restore))
         .route("/api/v1/operations/{id}", get(operation))
         .route("/api/v1/notifiers/{name}/test", post(test_notifier))
         .route("/api/v1/config", get(get_config).put(save_config))
         .route("/api/v1/config/schema", get(config_schema))
         .route("/api/v1/config/validate", post(validate_config))
         .route("/api/v1/config/apply", post(apply_config))
+        .route("/api/v1/update", get(update_status))
+        .route("/api/v1/update/check", post(update_check))
+        .route("/api/v1/update/download", post(update_download))
+        .route("/api/v1/update/apply", post(update_apply))
+        .route("/api/v1/update/rollback", post(update_rollback))
         .with_state(state)
 }
 
@@ -342,19 +408,41 @@ async fn service_worker() -> impl IntoResponse {
     )
 }
 
-async fn capabilities(State(_state): State<ApiState>) -> Json<Capabilities> {
+async fn squirrel_192() -> impl IntoResponse {
+    (
+        [("content-type", "image/png")],
+        include_bytes!("../../../apps/web/public/backuppo-squirrel-192.png").as_slice(),
+    )
+}
+
+async fn squirrel_512() -> impl IntoResponse {
+    (
+        [("content-type", "image/png")],
+        include_bytes!("../../../apps/web/public/backuppo-squirrel-512.png").as_slice(),
+    )
+}
+
+async fn capabilities(State(state): State<ApiState>) -> Json<Capabilities> {
+    let mut features = vec![
+        "jobs",
+        "history",
+        "run",
+        "verify",
+        "restore",
+        "notifier_test",
+        "config",
+    ];
+    #[cfg(feature = "hub")]
+    features.push("hub");
+    if state.runtime.config().updates.is_some() {
+        features.push("updates");
+    }
     Json(Capabilities {
         mode: "agent",
+        platform: std::env::consts::OS,
         api_version: "v1",
         product_version: env!("CARGO_PKG_VERSION"),
-        features: vec![
-            "jobs",
-            "history",
-            "run",
-            "verify",
-            "notifier_test",
-            "config",
-        ],
+        features,
         auth: "loopback_csrf",
     })
 }
@@ -367,6 +455,12 @@ async fn session(State(state): State<ApiState>) -> Json<SessionResponse> {
 
 async fn runtime_status(State(state): State<ApiState>) -> Json<RuntimeResponse> {
     let config = state.runtime.config();
+    let policy_reason = state
+        .runtime
+        .policy_violation
+        .read()
+        .expect("policy gate poisoned")
+        .clone();
     Json(RuntimeResponse {
         mode: state.runtime.mode.as_str(),
         jobs: config.jobs.len(),
@@ -376,6 +470,8 @@ async fn runtime_status(State(state): State<ApiState>) -> Json<RuntimeResponse> 
             .config_path
             .as_ref()
             .map(|path| path.display().to_string()),
+        policy_blocked: policy_reason.is_some(),
+        policy_reason,
     })
 }
 
@@ -438,6 +534,7 @@ async fn run_job_legacy(
     Path(job): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<RunResponse>, ApiError> {
+    state.runtime.enforce_policy()?;
     if headers
         .get("x-backuppo-ui")
         .and_then(|value| value.to_str().ok())
@@ -470,6 +567,7 @@ async fn start_action(
     Json(body): Json<ActionRequest>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
     require_csrf(&state, &headers)?;
+    state.runtime.enforce_policy()?;
     let config = state.runtime.config();
     let lock = job_lock(&state, &job)?;
     let guard = Arc::clone(&lock)
@@ -521,6 +619,45 @@ async fn start_action(
     });
 
     Ok((StatusCode::ACCEPTED, Json(operation)))
+}
+
+async fn job_snapshots(
+    State(state): State<ApiState>,
+    Path(job): Path<String>,
+) -> Result<Json<Vec<BackupRef>>, ApiError> {
+    let config = state.runtime.config();
+    backuppo_engine::snapshots(&job, &config)
+        .await
+        .map(Json)
+        .map_err(internal_error)
+}
+
+async fn job_browse(
+    State(state): State<ApiState>,
+    Path(job): Path<String>,
+    Query(query): Query<BrowseQuery>,
+) -> Result<Json<Vec<BackupEntry>>, ApiError> {
+    let config = state.runtime.config();
+    backuppo_engine::browse(&job, &config, &query.snapshot)
+        .await
+        .map(Json)
+        .map_err(internal_error)
+}
+
+async fn job_restore(
+    State(state): State<ApiState>,
+    Path(job): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<RestoreRequest>,
+) -> Result<Json<RestoreResult>, ApiError> {
+    require_csrf(&state, &headers)?;
+    let config = state.runtime.config();
+    let lock = job_lock(&state, &job)?;
+    let _guard = lock.try_lock().map_err(|_| conflict(&job))?;
+    backuppo_engine::restore(&job, &config, &request)
+        .await
+        .map(Json)
+        .map_err(internal_error)
 }
 
 async fn operation(
@@ -641,6 +778,130 @@ async fn apply_config(
         active_revision,
         restart_required,
     }))
+}
+
+async fn update_status(
+    State(state): State<ApiState>,
+) -> Result<Json<crate::updater::UpdateStatus>, ApiError> {
+    let config = state.runtime.config();
+    let settings = config.updates.as_ref().ok_or_else(updates_unavailable)?;
+    crate::updater::status(settings)
+        .map(Json)
+        .map_err(internal_error)
+}
+
+async fn update_check(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<UpdateActionResponse>, ApiError> {
+    require_csrf(&state, &headers)?;
+    let config = state.runtime.config();
+    let settings = config.updates.as_ref().ok_or_else(updates_unavailable)?;
+    let detail = match crate::updater::check(settings)
+        .await
+        .map_err(internal_error)?
+    {
+        Some(checked) => format!("Backuppo {} disponibile", checked.manifest.version),
+        None => "Backuppo e' aggiornato".into(),
+    };
+    Ok(Json(UpdateActionResponse {
+        status: crate::updater::status(settings).map_err(internal_error)?,
+        detail,
+        restart_required: false,
+    }))
+}
+
+async fn update_download(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<UpdateActionResponse>, ApiError> {
+    require_csrf(&state, &headers)?;
+    let config = state.runtime.config();
+    let settings = config.updates.as_ref().ok_or_else(updates_unavailable)?;
+    let checked = crate::updater::check(settings)
+        .await
+        .map_err(internal_error)?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "up_to_date",
+                "nessun aggiornamento disponibile",
+            )
+        })?;
+    let path = crate::updater::download(settings, &checked)
+        .await
+        .map_err(internal_error)?;
+    Ok(Json(UpdateActionResponse {
+        status: crate::updater::status(settings).map_err(internal_error)?,
+        detail: format!("aggiornamento salvato in '{}'", path.display()),
+        restart_required: false,
+    }))
+}
+
+async fn update_apply(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<UpdateActionResponse>, ApiError> {
+    require_csrf(&state, &headers)?;
+    if state
+        .runtime
+        .locks
+        .read()
+        .expect("job locks poisoned")
+        .values()
+        .any(|lock| lock.try_lock().is_err())
+    {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "jobs_running",
+            "attendere la fine dei job attivi",
+        ));
+    }
+    let config = state.runtime.config();
+    let settings = config.updates.as_ref().ok_or_else(updates_unavailable)?;
+    let backup = crate::updater::apply(settings).map_err(internal_error)?;
+    Ok(Json(UpdateActionResponse {
+        status: crate::updater::status(settings).map_err(internal_error)?,
+        detail: format!("installato; versione precedente in '{}'", backup.display()),
+        restart_required: true,
+    }))
+}
+
+async fn update_rollback(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> Result<Json<UpdateActionResponse>, ApiError> {
+    require_csrf(&state, &headers)?;
+    if state
+        .runtime
+        .locks
+        .read()
+        .expect("job locks poisoned")
+        .values()
+        .any(|lock| lock.try_lock().is_err())
+    {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "jobs_running",
+            "attendere la fine dei job attivi",
+        ));
+    }
+    let config = state.runtime.config();
+    let settings = config.updates.as_ref().ok_or_else(updates_unavailable)?;
+    crate::updater::rollback(settings).map_err(internal_error)?;
+    Ok(Json(UpdateActionResponse {
+        status: crate::updater::status(settings).map_err(internal_error)?,
+        detail: "rollback installato".into(),
+        restart_required: true,
+    }))
+}
+
+fn updates_unavailable() -> ApiError {
+    ApiError::new(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "updates_unavailable",
+        "aggiornamenti non configurati",
+    )
 }
 
 fn config_path(state: &ApiState) -> Result<Arc<PathBuf>, ApiError> {

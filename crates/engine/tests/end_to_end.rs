@@ -55,6 +55,7 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
         observability: None,
         reports: Vec::new(),
         api: None,
+        updates: None,
     }
 }
 
@@ -138,7 +139,9 @@ async fn folder_to_local_round_trip_is_identical() {
         uploaded_path,
         restore_dir.path(),
         true,
-        Some("correct horse battery staple"),
+        Some(&archive::EncryptionMaterial::Passphrase(
+            "correct horse battery staple".into(),
+        )),
     )
     .unwrap();
 
@@ -172,7 +175,9 @@ async fn wrong_passphrase_fails_to_restore() {
         &uploaded,
         restore_dir.path(),
         true,
-        Some("wrong-passphrase"),
+        Some(&archive::EncryptionMaterial::Passphrase(
+            "wrong-passphrase".into(),
+        )),
     );
     assert!(result.is_err(), "una passphrase sbagliata deve fallire");
 }

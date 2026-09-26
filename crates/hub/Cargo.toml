@@ -13,6 +13,8 @@ path = "src/main.rs"
 backuppo-core.workspace = true
 backuppo-notifiers.workspace = true
 anyhow = "1.0.104"
+base64 = "0.22.1"
+ed25519-dalek = "2.2.0"
 argon2 = "0.5.3"
 axum = { version = "0.8.8", features = ["json"] }
 chrono = "0.4.45"
@@ -22,6 +24,7 @@ jsonwebtoken = "9.3.1"
 rand = "0.8.8"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 serde_yaml = "0.9.34"
 sha2 = "0.11.0"
 tokio = { version = "1.53.1", features = ["net", "rt-multi-thread", "macros", "signal", "sync", "time"] }
@@ -32,3 +35,6 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 [dev-dependencies]
 tempfile = "3.27.0"
 wiremock = "0.6.5"
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.8.0"

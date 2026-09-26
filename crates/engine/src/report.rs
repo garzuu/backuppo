@@ -125,6 +125,7 @@ mod tests {
             }),
             reports: Vec::new(),
             api: None,
+            updates: None,
         };
 
         let JobEvent::Report { summary } = build(&config, 7).expect("report") else {

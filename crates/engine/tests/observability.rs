@@ -55,6 +55,7 @@ fn build_config(root: &std::path::Path) -> Config {
         }),
         reports: Vec::new(),
         api: None,
+        updates: None,
     }
 }
 

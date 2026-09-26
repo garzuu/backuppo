@@ -85,6 +85,7 @@ fn build_config(
         observability: None,
         reports: Vec::new(),
         api: None,
+        updates: None,
     }
 }
 
@@ -168,6 +169,7 @@ async fn assert_retention_prunes_old_backups(
         observability: None,
         reports: Vec::new(),
         api: None,
+        updates: None,
     };
 
     let summary = backuppo_engine::retention::apply(job_name, &config)

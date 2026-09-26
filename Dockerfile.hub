@@ -14,9 +14,10 @@ RUN apk add --no-cache ca-certificates tzdata \
     && mkdir -p /etc/backuppo-hub /var/lib/backuppo-hub \
     && chown -R backuppo-hub:backuppo-hub /var/lib/backuppo-hub
 COPY --from=builder /src/target/release/backuppo-hub /usr/local/bin/backuppo-hub
+COPY --chown=backuppo-hub:backuppo-hub deploy/config/hub-docker.yaml /etc/backuppo-hub/config.yaml
 
 USER backuppo-hub
-VOLUME ["/var/lib/backuppo-hub"]
+VOLUME ["/etc/backuppo-hub", "/var/lib/backuppo-hub"]
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/backuppo-hub"]
 CMD ["serve", "--config", "/etc/backuppo-hub/config.yaml"]

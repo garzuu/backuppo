@@ -1,0 +1,13 @@
+# Configurazione iniziale Backuppo Agent. Completa il primo job dalla Web UI.
+destinations: {}
+notifiers: {}
+jobs: {}
+reports: []
+
+observability:
+  history_path: /var/lib/backuppo/history.sqlite
+  status_page: /var/lib/backuppo/status.html
+
+api:
+  bind: 127.0.0.1:8787
+

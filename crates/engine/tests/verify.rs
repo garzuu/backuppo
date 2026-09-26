@@ -56,6 +56,7 @@ fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
         observability: None,
         reports: Vec::new(),
         api: None,
+        updates: None,
     }
 }
 

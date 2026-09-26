@@ -1,5 +1,9 @@
 mod api;
 mod daemon;
+#[cfg(feature = "hub")]
+mod policy;
+mod storage_check;
+mod updater;
 #[cfg(windows)]
 mod windows_service;
 
@@ -7,7 +11,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 use backuppo_core::config::{validate, Config};
-use backuppo_core::model::JobEvent;
+use backuppo_core::model::{JobEvent, OverwritePolicy, RestoreRequest};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -41,6 +45,61 @@ enum Command {
         config: PathBuf,
         #[arg(long)]
         job: String,
+    },
+    /// Verifica online le protezioni dello storage configurate per un job.
+    StorageCheck {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+    },
+    /// Applica retention/prune Restic con credenziali amministrative separate.
+    Maintain {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+    },
+    /// Elenca gli snapshot disponibili per un job.
+    Snapshots {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+    },
+    /// Elenca file e directory contenuti in uno snapshot.
+    Browse {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+        #[arg(long, default_value = "latest")]
+        snapshot: String,
+    },
+    /// Ripristina uno snapshot in una directory locale.
+    Restore {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+        #[arg(long, default_value = "latest")]
+        snapshot: String,
+        #[arg(long)]
+        target: PathBuf,
+        #[arg(long = "include")]
+        include: Vec<String>,
+        #[arg(long)]
+        dry_run: bool,
+        /// Autorizza la scrittura in una directory non vuota.
+        #[arg(long)]
+        overwrite: bool,
+    },
+    /// Controlla, scarica o applica aggiornamenti firmati.
+    Update {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[command(subcommand)]
+        action: UpdateAction,
     },
     /// Invia un messaggio di prova a uno o tutti i notifier configurati.
     NotifyTest {
@@ -82,6 +141,15 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum UpdateAction {
+    Check,
+    Download,
+    Status,
+    Apply,
+    Rollback,
+}
+
 /// Configura i log. Senza `RUST_LOG` i servizi a lunga durata (`daemon`,
 /// `serve`) loggano a livello `info`, altrimenti restano invisibili; i comandi
 /// one-shot solo da `warn`, per non riempire l'output di chi li lancia a mano.
@@ -117,6 +185,24 @@ async fn main() -> Result<()> {
         Command::Check { config } => check(&config),
         Command::Run { config, job } => run(&config, &job).await,
         Command::Verify { config, job } => verify(&config, &job).await,
+        Command::StorageCheck { config, job } => storage_check(&config, &job).await,
+        Command::Maintain { config, job } => maintain(&config, &job).await,
+        Command::Snapshots { config, job } => snapshots(&config, &job).await,
+        Command::Browse {
+            config,
+            job,
+            snapshot,
+        } => browse(&config, &job, &snapshot).await,
+        Command::Restore {
+            config,
+            job,
+            snapshot,
+            target,
+            include,
+            dry_run,
+            overwrite,
+        } => restore(&config, &job, snapshot, target, include, dry_run, overwrite).await,
+        Command::Update { config, action } => update(&config, action).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
         Command::Daemon { config } => daemon::run(load_config(&config)?, config).await,
         Command::Serve { config } => api::serve(load_config(&config)?, config).await,
@@ -125,6 +211,81 @@ async fn main() -> Result<()> {
         #[cfg(windows)]
         Command::Service { config } => windows_service::run(config),
     }
+}
+
+async fn storage_check(config_path: &PathBuf, job_name: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+    let job = config
+        .jobs
+        .get(job_name)
+        .with_context(|| format!("job '{job_name}' non trovato"))?;
+    let destination = config
+        .destinations
+        .get(&job.destination)
+        .with_context(|| format!("destination '{}' non trovata", job.destination))?;
+    let object_lock = match destination {
+        backuppo_core::config::DestinationConfig::Restic {
+            object_lock: Some(settings),
+            ..
+        } => settings,
+        backuppo_core::config::DestinationConfig::Restic { .. } => {
+            bail!("job '{job_name}': object_lock non configurato")
+        }
+        _ => bail!("job '{job_name}': storage-check e' disponibile per repository Restic S3"),
+    };
+    let report = storage_check::verify_object_lock(object_lock).await?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
+async fn maintain(config_path: &PathBuf, job_name: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+    backuppo_engine::maintain(job_name, &config).await?;
+    println!("manutenzione Restic completata per '{job_name}'");
+    Ok(())
+}
+
+async fn update(config_path: &PathBuf, action: UpdateAction) -> Result<()> {
+    let config = load_config(config_path)?;
+    let settings = config
+        .updates
+        .as_ref()
+        .context("la configurazione non contiene la sezione 'updates'")?;
+    match action {
+        UpdateAction::Check => match updater::check(settings).await? {
+            Some(checked) => println!(
+                "aggiornamento disponibile: {} ({} byte, {})",
+                checked.manifest.version, checked.artifact.size, checked.artifact.target
+            ),
+            None => println!("Backuppo e' aggiornato."),
+        },
+        UpdateAction::Download => {
+            let checked = updater::check(settings)
+                .await?
+                .context("nessun aggiornamento disponibile")?;
+            let path = updater::download(settings, &checked).await?;
+            println!("aggiornamento verificato e salvato in '{}'", path.display());
+        }
+        UpdateAction::Status => {
+            let status = updater::status(settings)?;
+            println!("{}", serde_json::to_string_pretty(&status)?);
+        }
+        UpdateAction::Apply => {
+            let backup = updater::apply(settings)?;
+            println!(
+                "aggiornamento installato; riavvia Backuppo. Versione precedente: '{}'",
+                backup.display()
+            );
+        }
+        UpdateAction::Rollback => {
+            let replaced = updater::rollback(settings)?;
+            println!(
+                "rollback completato; riavvia Backuppo. Versione sostituita: '{}'",
+                replaced.display()
+            );
+        }
+    }
+    Ok(())
 }
 
 fn history_store(config: &Config) -> Result<backuppo_engine::history::HistoryStore> {
@@ -266,6 +427,80 @@ async fn verify(config_path: &PathBuf, job_name: &str) -> Result<()> {
             bail!("verifica fallita");
         }
     }
+}
+
+async fn snapshots(config_path: &PathBuf, job_name: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+    let snapshots = backuppo_engine::snapshots(job_name, &config).await?;
+    println!("CREATO\tMOTORE\tID");
+    for snapshot in snapshots {
+        println!(
+            "{}\t{}\t{}",
+            format_timestamp(snapshot.created_at),
+            snapshot.engine,
+            snapshot.id
+        );
+    }
+    Ok(())
+}
+
+async fn browse(config_path: &PathBuf, job_name: &str, snapshot: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+    let entries = backuppo_engine::browse(job_name, &config, snapshot).await?;
+    println!("TIPO\tBYTE\tPERCORSO");
+    for entry in entries {
+        println!(
+            "{}\t{}\t{}",
+            entry.kind,
+            entry
+                .bytes
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".into()),
+            entry.path
+        );
+    }
+    Ok(())
+}
+
+async fn restore(
+    config_path: &PathBuf,
+    job_name: &str,
+    snapshot: String,
+    target: PathBuf,
+    include: Vec<String>,
+    dry_run: bool,
+    overwrite: bool,
+) -> Result<()> {
+    let config = load_config(config_path)?;
+    let result = backuppo_engine::restore(
+        job_name,
+        &config,
+        &RestoreRequest {
+            snapshot,
+            target,
+            include,
+            dry_run,
+            overwrite: if overwrite {
+                OverwritePolicy::Always
+            } else {
+                OverwritePolicy::Never
+            },
+        },
+    )
+    .await?;
+    println!(
+        "{}: {} file, {} byte da '{}' verso '{}'",
+        if result.dry_run {
+            "dry-run"
+        } else {
+            "restore completato"
+        },
+        result.files,
+        result.bytes,
+        result.snapshot,
+        result.target.display()
+    );
+    Ok(())
 }
 
 async fn notify_test(config_path: &PathBuf, notifier_name: Option<&str>) -> Result<()> {

@@ -56,6 +56,106 @@ jobs:
     assert!(event.to_string().contains("snapshot Restic"));
 }
 
+#[tokio::test]
+async fn append_only_repository_never_runs_forget_or_prune() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source");
+    let repository = temp.path().join("repository");
+    let fake_restic = temp.path().join("restic");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("data.txt"), "protected data").unwrap();
+    std::fs::write(&fake_restic, FAKE_RESTIC).unwrap();
+    let mut permissions = std::fs::metadata(&fake_restic).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&fake_restic, permissions).unwrap();
+    let password_env = format!("BACKUPPO_RESTIC_APPEND_ONLY_{}", std::process::id());
+    std::env::set_var(&password_env, "test-password");
+    let yaml = format!(
+        r#"
+destinations:
+  snapshots:
+    type: restic
+    repository: "{}"
+    password_env: {}
+    binary: "{}"
+    append_only: true
+jobs:
+  documents:
+    engine: restic
+    source: {{ type: folder, path: "{}" }}
+    destination: snapshots
+    schedule: "0 3 * * *"
+    retention: {{ daily: 2 }}
+"#,
+        repository.display(),
+        password_env,
+        fake_restic.display(),
+        source.display()
+    );
+    let config = Config::from_yaml(&yaml).unwrap();
+    validate(&config).unwrap();
+    backuppo_engine::run_and_retain("documents", &config)
+        .await
+        .unwrap();
+    assert!(!repository.join("forget-called").exists());
+}
+
+#[tokio::test]
+async fn manual_maintenance_uses_only_administrative_credentials() {
+    let temp = tempfile::tempdir().unwrap();
+    let repository = temp.path().join("repository");
+    let fake_restic = temp.path().join("restic");
+    std::fs::create_dir_all(&repository).unwrap();
+    std::fs::write(&fake_restic, FAKE_RESTIC).unwrap();
+    let mut permissions = std::fs::metadata(&fake_restic).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&fake_restic, permissions).unwrap();
+    let suffix = std::process::id();
+    let password = format!("BACKUPPO_RESTIC_MAINT_PASSWORD_{suffix}");
+    let writer = format!("BACKUPPO_RESTIC_WRITER_{suffix}");
+    let admin = format!("BACKUPPO_RESTIC_ADMIN_{suffix}");
+    std::env::set_var(&password, "test-password");
+    std::env::set_var(&writer, "writer-key");
+    std::env::set_var(&admin, "admin-key");
+    let yaml = format!(
+        r#"
+destinations:
+  snapshots:
+    type: restic
+    repository: "{}"
+    password_env: {}
+    binary: "{}"
+    append_only: true
+    environment:
+      AWS_ACCESS_KEY_ID: {}
+    maintenance_environment:
+      AWS_ACCESS_KEY_ID: {}
+jobs:
+  documents:
+    engine: restic
+    source: {{ type: folder, path: "{}" }}
+    destination: snapshots
+    schedule: "0 3 * * *"
+    retention: {{ daily: 2 }}
+"#,
+        repository.display(),
+        password,
+        fake_restic.display(),
+        writer,
+        admin,
+        temp.path().display()
+    );
+    let config = Config::from_yaml(&yaml).unwrap();
+    validate(&config).unwrap();
+    backuppo_engine::maintain("documents", &config)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(repository.join("forget-credential")).unwrap(),
+        "admin-key"
+    );
+}
+
 const FAKE_RESTIC: &str = r#"#!/bin/sh
 set -eu
 case "$1" in
@@ -84,6 +184,7 @@ case "$1" in
     ;;
   forget)
     touch "$RESTIC_REPOSITORY/forget-called"
+    printf '%s' "${AWS_ACCESS_KEY_ID:-}" > "$RESTIC_REPOSITORY/forget-credential"
     ;;
   *) exit 2 ;;
 esac

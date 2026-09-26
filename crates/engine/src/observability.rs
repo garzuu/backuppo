@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use backuppo_core::config::Config;
-use backuppo_core::model::Artifact;
+use backuppo_core::model::{Artifact, RestoreResult};
 use tracing::warn;
 
 use crate::history::{ExecutionCompletion, HistoryStore};
@@ -106,6 +106,39 @@ impl ExecutionObserver {
             }
         };
         self.finish(config, status, None, error.as_deref(), message);
+    }
+
+    pub(crate) fn finish_restore(
+        &self,
+        config: &Config,
+        result: &Result<RestoreResult, backuppo_core::error::BackupError>,
+    ) {
+        let (status, bytes, error, message) = match result {
+            Ok(restored) => (
+                "success",
+                Some(restored.bytes),
+                None,
+                format!(
+                    "{} {} completato: snapshot {}, {} file, {} byte\n",
+                    now_rfc3339(),
+                    if restored.dry_run {
+                        "dry-run restore"
+                    } else {
+                        "restore"
+                    },
+                    restored.snapshot,
+                    restored.files,
+                    restored.bytes
+                ),
+            ),
+            Err(error) => (
+                "failure",
+                None,
+                Some(error.to_string()),
+                format!("{} restore fallito: {error}\n", now_rfc3339()),
+            ),
+        };
+        self.finish(config, status, bytes, error.as_deref(), message);
     }
 
     fn finish(

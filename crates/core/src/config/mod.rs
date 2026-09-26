@@ -26,13 +26,69 @@ pub struct Config {
     /// API HTTP e Web UI locale. Se assente, il server non viene avviato.
     #[serde(default)]
     pub api: Option<ApiConfig>,
+    /// Aggiornamenti firmati. Se assente Backuppo non effettua richieste di
+    /// rete per controllare nuove versioni.
+    #[serde(default)]
+    pub updates: Option<UpdateConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UpdateConfig {
+    pub manifest_url: String,
+    /// Chiave pubblica Ed25519 raw (32 byte) codificata base64.
+    pub public_key: String,
+    /// Chiavi root aggiuntive utilizzabili per rotazione o recovery.
+    #[serde(default)]
+    pub recovery_public_keys: Vec<String>,
+    #[serde(default)]
+    pub channel: UpdateChannel,
+    #[serde(default)]
+    pub pinned_version: Option<String>,
+    #[serde(default = "default_update_download_dir")]
+    pub download_dir: String,
+    #[serde(default)]
+    pub install_mode: UpdateInstallMode,
+    /// Scarica in staging una release valida; l'installazione resta
+    /// subordinata ad approvazione/finestra di manutenzione.
+    #[serde(default)]
+    pub auto_download: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateChannel {
+    #[default]
+    Stable,
+    Beta,
+    Pinned,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateInstallMode {
+    /// Scarica e segnala soltanto: adatto a pacchetti di sistema.
+    #[default]
+    Notify,
+    /// Consente la sostituzione atomica di un binario standalone.
+    Standalone,
+    Package,
+    Docker,
+}
+
+fn default_update_download_dir() -> String {
+    "backuppo-updates".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ApiConfig {
-    /// Indirizzo di ascolto. Per sicurezza deve essere loopback.
+    /// Indirizzo di ascolto. Per impostazione predefinita deve essere loopback.
     #[serde(default = "default_api_bind")]
     pub bind: String,
+    /// Consente esplicitamente un bind non-loopback, necessario in container.
+    /// La UI non ha login: la porta deve comunque essere pubblicata soltanto
+    /// su loopback o protetta da un controllo di accesso esterno.
+    #[serde(default)]
+    pub allow_remote: bool,
 }
 
 fn default_api_bind() -> String {
@@ -196,7 +252,42 @@ pub enum DestinationConfig {
         binary: String,
         #[serde(default = "default_true")]
         initialize: bool,
+        /// Il repository accetta nuove scritture ma la manutenzione
+        /// distruttiva avviene con credenziali separate.
+        #[serde(default)]
+        append_only: bool,
+        /// Credenziali privilegiate usate esclusivamente da `bkpo maintain`.
+        /// Non vengono mai caricate durante backup, restore o daemon.
+        #[serde(default)]
+        maintenance_environment: HashMap<String, String>,
+        /// Policy S3 Object Lock attesa per il repository. La verifica e'
+        /// esplicita e non modifica mai la configurazione del bucket.
+        #[serde(default)]
+        object_lock: Option<S3ObjectLockConfig>,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct S3ObjectLockConfig {
+    pub bucket: String,
+    pub region: String,
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    pub access_key_id_env: String,
+    pub secret_access_key_env: String,
+    #[serde(default)]
+    pub session_token_env: Option<String>,
+    #[serde(default)]
+    pub virtual_host_style: bool,
+    pub expected_mode: ObjectLockMode,
+    pub minimum_retention_days: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ObjectLockMode {
+    Governance,
+    Compliance,
 }
 
 fn default_restic_binary() -> String {
@@ -274,6 +365,18 @@ pub enum NotifierConfig {
         remote_commands: bool,
         #[serde(default = "default_hub_command_poll_seconds")]
         command_poll_seconds: u64,
+        /// Chiave Ed25519 pubblica base64 usata per verificare le policy
+        /// distribuite dall'hub. Se assente il polling policy e' disabilitato.
+        #[serde(default)]
+        policy_public_key: Option<String>,
+        /// ID del sito assegnato dall'hub. Viene incluso nel payload firmato
+        /// e impedisce il replay di una policy valida su un altro agent.
+        #[serde(default)]
+        policy_site_id: Option<i64>,
+        #[serde(default = "default_hub_policy_state_path")]
+        policy_state_path: String,
+        #[serde(default = "default_hub_policy_poll_seconds")]
+        policy_poll_seconds: u64,
     },
 }
 
@@ -285,6 +388,16 @@ fn default_hub_heartbeat_seconds() -> u64 {
 #[cfg(feature = "hub")]
 fn default_hub_command_poll_seconds() -> u64 {
     15
+}
+
+#[cfg(feature = "hub")]
+fn default_hub_policy_poll_seconds() -> u64 {
+    300
+}
+
+#[cfg(feature = "hub")]
+fn default_hub_policy_state_path() -> String {
+    "backuppo-policy-state.json".to_string()
 }
 
 #[cfg(feature = "hub")]

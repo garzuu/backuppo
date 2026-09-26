@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.backuppo.agent</string>
+  <key>ProgramArguments</key><array><string>/usr/local/bin/bkpo</string><string>daemon</string><string>--config</string><string>/Library/Application Support/Backuppo/config.yaml</string></array>
+  <key>EnvironmentVariables</key><dict><key>RUST_LOG</key><string>info</string></dict>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Library/Logs/Backuppo/agent.log</string>
+  <key>StandardErrorPath</key><string>/Library/Logs/Backuppo/agent-error.log</string>
+</dict></plist>
+

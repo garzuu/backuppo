@@ -37,11 +37,21 @@ where
         Some(reload_tx),
         crate::api::RuntimeMode::Daemon,
     );
+    let policy_gate = runtime.policy_gate();
     let api_handle = crate::api::spawn(runtime).await?;
     let mut config = config;
     #[cfg(feature = "hub")]
-    let mut hub_handles = spawn_hub_tasks(Arc::clone(&config), Arc::clone(&locks));
-    let mut scheduler = start_scheduler(Arc::clone(&config), Arc::clone(&locks)).await?;
+    let mut hub_handles = spawn_hub_tasks(
+        Arc::clone(&config),
+        Arc::clone(&locks),
+        Arc::clone(&policy_gate),
+    );
+    let mut scheduler = start_scheduler(
+        Arc::clone(&config),
+        Arc::clone(&locks),
+        Arc::clone(&policy_gate),
+    )
+    .await?;
 
     info!(
         jobs = config.jobs.len(),
@@ -63,10 +73,18 @@ where
                 for handle in hub_handles.drain(..) {
                     handle.abort();
                 }
-                scheduler = start_scheduler(Arc::clone(&next), Arc::clone(&locks)).await?;
+                scheduler = start_scheduler(
+                    Arc::clone(&next),
+                    Arc::clone(&locks),
+                    Arc::clone(&policy_gate),
+                ).await?;
                 #[cfg(feature = "hub")]
                 {
-                    hub_handles = spawn_hub_tasks(Arc::clone(&next), Arc::clone(&locks));
+                    hub_handles = spawn_hub_tasks(
+                        Arc::clone(&next),
+                        Arc::clone(&locks),
+                        Arc::clone(&policy_gate),
+                    );
                 }
                 config = next;
                 info!(jobs = config.jobs.len(), reports = config.reports.len(), "configurazione applicata al daemon");
@@ -90,7 +108,13 @@ where
     Ok(())
 }
 
-async fn start_scheduler(config: Arc<Config>, locks: crate::api::JobLocks) -> Result<JobScheduler> {
+type PolicyGate = Arc<std::sync::RwLock<Option<String>>>;
+
+async fn start_scheduler(
+    config: Arc<Config>,
+    locks: crate::api::JobLocks,
+    policy_gate: PolicyGate,
+) -> Result<JobScheduler> {
     let scheduler = JobScheduler::new()
         .await
         .context("impossibile creare lo scheduler")?;
@@ -103,13 +127,15 @@ async fn start_scheduler(config: Arc<Config>, locks: crate::api::JobLocks) -> Re
         let job_name = name.clone();
         let config = Arc::clone(&config);
         let locks = Arc::clone(&locks);
+        let policy_gate = Arc::clone(&policy_gate);
 
         let scheduled = Job::new_async(cron_expr.as_str(), move |_uuid, _scheduler| {
             let job_name = job_name.clone();
             let config = Arc::clone(&config);
             let locks = Arc::clone(&locks);
+            let policy_gate = Arc::clone(&policy_gate);
             Box::pin(async move {
-                run_one_tick(job_name, config, locks).await;
+                run_one_tick(job_name, config, locks, policy_gate).await;
             })
         })
         .with_context(|| format!("schedule non valido per il job '{name}': '{cron_expr}'"))?;
@@ -143,6 +169,31 @@ async fn start_scheduler(config: Arc<Config>, locks: crate::api::JobLocks) -> Re
         })?;
     }
 
+    if let Some(updates) = config
+        .updates
+        .clone()
+        .filter(|updates| updates.auto_download)
+    {
+        let scheduled = Job::new_async("0 0 4 * * *", move |_uuid, _scheduler| {
+            let updates = updates.clone();
+            Box::pin(async move {
+                match crate::updater::check(&updates).await {
+                    Ok(Some(checked)) => match crate::updater::download(&updates, &checked).await {
+                        Ok(path) => info!(path = %path.display(), version = %checked.manifest.version, "aggiornamento firmato scaricato in staging"),
+                        Err(error) => warn!(%error, "download automatico aggiornamento fallito"),
+                    },
+                    Ok(None) => {}
+                    Err(error) => warn!(%error, "controllo automatico aggiornamenti fallito"),
+                }
+            })
+        })
+        .context("impossibile creare il controllo aggiornamenti")?;
+        scheduler
+            .add(scheduled)
+            .await
+            .context("impossibile registrare il controllo aggiornamenti")?;
+    }
+
     scheduler
         .start()
         .await
@@ -160,31 +211,53 @@ type Locks = crate::api::JobLocks;
 /// esegue i comandi "esegui ora"/"verifica ora". Nessun errore verso l'hub
 /// deve mai arrestare il daemon o far fallire un job: viene solo loggato.
 #[cfg(feature = "hub")]
-fn spawn_hub_tasks(config: Arc<Config>, locks: Locks) -> Vec<tokio::task::JoinHandle<()>> {
+fn spawn_hub_tasks(
+    config: Arc<Config>,
+    locks: Locks,
+    policy_gate: PolicyGate,
+) -> Vec<tokio::task::JoinHandle<()>> {
     use backuppo_core::config::NotifierConfig;
 
-    let Some((url, token_env, heartbeat_seconds, queue_path, remote_commands, poll_seconds)) =
-        config
-            .notifiers
-            .values()
-            .find_map(|notifier| match notifier {
-                NotifierConfig::Hub {
-                    url,
-                    token_env,
-                    heartbeat_seconds,
-                    queue_path,
-                    remote_commands,
-                    command_poll_seconds,
-                } => Some((
-                    url.clone(),
-                    token_env.clone(),
-                    *heartbeat_seconds,
-                    queue_path.clone(),
-                    *remote_commands,
-                    *command_poll_seconds,
-                )),
-                _ => None,
-            })
+    let Some((
+        url,
+        token_env,
+        heartbeat_seconds,
+        queue_path,
+        remote_commands,
+        poll_seconds,
+        policy_public_key,
+        policy_site_id,
+        policy_state_path,
+        policy_poll_seconds,
+    )) = config
+        .notifiers
+        .values()
+        .find_map(|notifier| match notifier {
+            NotifierConfig::Hub {
+                url,
+                token_env,
+                heartbeat_seconds,
+                queue_path,
+                remote_commands,
+                command_poll_seconds,
+                policy_public_key,
+                policy_site_id,
+                policy_state_path,
+                policy_poll_seconds,
+            } => Some((
+                url.clone(),
+                token_env.clone(),
+                *heartbeat_seconds,
+                queue_path.clone(),
+                *remote_commands,
+                *command_poll_seconds,
+                policy_public_key.clone(),
+                *policy_site_id,
+                policy_state_path.clone(),
+                *policy_poll_seconds,
+            )),
+            _ => None,
+        })
     else {
         return Vec::new();
     };
@@ -208,6 +281,65 @@ fn spawn_hub_tasks(config: Arc<Config>, locks: Locks) -> Vec<tokio::task::JoinHa
         }
     }));
 
+    if let (Some(public_key), Some(policy_site_id)) = (policy_public_key, policy_site_id) {
+        let (policy_url, policy_token_env) = (url.clone(), token_env.clone());
+        let policy_config = Arc::clone(&config);
+        let gate = Arc::clone(&policy_gate);
+        handles.push(tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(
+                policy_poll_seconds.max(1),
+            ));
+            let mut active_expires_at: Option<i64> = None;
+            loop {
+                interval.tick().await;
+                let current_time = chrono::Utc::now().timestamp();
+                if active_expires_at.is_some_and(|expires_at| expires_at <= current_time) {
+                    *gate.write().expect("policy gate poisoned") =
+                        Some("policy centrale scaduta".into());
+                }
+                match backuppo_notifiers::hub::fetch_policy(&policy_url, &policy_token_env).await {
+                    Ok(Some(signed)) => match crate::policy::verify_and_evaluate(
+                        &signed,
+                        &public_key,
+                        policy_site_id,
+                        std::path::Path::new(&policy_state_path),
+                        &policy_config,
+                        current_time,
+                    ) {
+                        Ok(decision) => {
+                            if !decision.violations.is_empty() {
+                                warn!(
+                                    sequence = decision.sequence,
+                                    violations = %decision.violations.join("; "),
+                                    "policy centrale non rispettata"
+                                );
+                            }
+                            *gate.write().expect("policy gate poisoned") =
+                                decision.blocking_reason();
+                            active_expires_at = Some(decision.expires_at);
+                        }
+                        Err(error) => {
+                            warn!(%error, "policy centrale rifiutata");
+                            let message = error.to_string();
+                            if message.contains("scaduta")
+                                || message.contains("firma")
+                                || message.contains("rollback")
+                            {
+                                *gate.write().expect("policy gate poisoned") =
+                                    Some(format!("policy centrale non valida: {message}"));
+                            }
+                        }
+                    },
+                    Ok(None) => {
+                        *gate.write().expect("policy gate poisoned") =
+                            Some("nessuna policy firmata assegnata al sito".into());
+                    }
+                    Err(error) => warn!(%error, "ritiro policy dall'hub fallito; uso la policy valida in cache"),
+                }
+            }
+        }));
+    }
+
     if remote_commands {
         info!("comandi remoti dall'hub abilitati: solo job presenti in questa config");
         handles.push(tokio::spawn(async move {
@@ -215,6 +347,10 @@ fn spawn_hub_tasks(config: Arc<Config>, locks: Locks) -> Vec<tokio::task::JoinHa
                 tokio::time::interval(std::time::Duration::from_secs(poll_seconds.max(1)));
             loop {
                 interval.tick().await;
+                if let Some(reason) = policy_gate.read().expect("policy gate poisoned").clone() {
+                    warn!(%reason, "poll comandi remoti sospeso dalla policy");
+                    continue;
+                }
                 let commands = match backuppo_notifiers::hub::fetch_commands(&url, &token_env).await
                 {
                     Ok(commands) => commands,
@@ -295,7 +431,16 @@ async fn execute_command(
     }
 }
 
-async fn run_one_tick(job_name: String, config: Arc<Config>, locks: crate::api::JobLocks) {
+async fn run_one_tick(
+    job_name: String,
+    config: Arc<Config>,
+    locks: crate::api::JobLocks,
+    policy_gate: PolicyGate,
+) {
+    if let Some(reason) = policy_gate.read().expect("policy gate poisoned").clone() {
+        warn!(job = %job_name, %reason, "esecuzione bloccata dalla policy centrale");
+        return;
+    }
     let Some(lock) = locks
         .read()
         .expect("job locks poisoned")
@@ -392,6 +537,7 @@ mod tests {
             observability: None,
             reports: Vec::new(),
             api: None,
+            updates: None,
         }
     }
 
@@ -403,6 +549,7 @@ mod tests {
 
         let config = Arc::new(build_config(src_dir.path(), dst_dir.path()));
         let locks = crate::api::build_locks(&config);
+        let gate = Arc::new(std::sync::RwLock::new(None));
 
         // Simula un'esecuzione già in corso per "documents".
         let lock = locks.read().unwrap().get("documents").cloned().unwrap();
@@ -412,6 +559,7 @@ mod tests {
             "documents".to_string(),
             Arc::clone(&config),
             Arc::clone(&locks),
+            Arc::clone(&gate),
         )
         .await;
 
@@ -423,7 +571,7 @@ mod tests {
 
         drop(held_guard);
 
-        run_one_tick("documents".to_string(), config, locks).await;
+        run_one_tick("documents".to_string(), config, locks, gate).await;
         assert_eq!(
             fs::read_dir(dst_dir.path()).unwrap().count(),
             1,
