@@ -14,10 +14,10 @@ cifratura `age` e Hub opzionale per gestire più siti.
 [![Licenza](https://img.shields.io/badge/licenza-MIT%20%2F%20Apache--2.0-blue)](#licenza)
 ![Piattaforme](https://img.shields.io/badge/piattaforme-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20Docker-lightgrey)
 
-[**Documentazione**](https://backuppo.garzuu.com) ·
-[Installazione](https://backuppo.garzuu.com/installazione/) ·
-[Quickstart](https://backuppo.garzuu.com/quickstart/) ·
-[Configurazione](https://backuppo.garzuu.com/configuration/) ·
+[**Documentazione**](https://garzuu.github.io/backuppo) ·
+[Installazione](https://garzuu.github.io/backuppo/installazione/) ·
+[Quickstart](https://garzuu.github.io/backuppo/quickstart/) ·
+[Configurazione](https://garzuu.github.io/backuppo/configuration/) ·
 [Changelog](CHANGELOG.md)
 
 </div>
@@ -67,7 +67,7 @@ bkpo restore --config config.yaml --job home-documents --snapshot latest --targe
 ```
 
 Per installare il componente giusto usa la
-[guida di installazione](https://backuppo.garzuu.com/installazione/); gli
+[guida di installazione](https://garzuu.github.io/backuppo/installazione/); gli
 script e le configurazioni pronte sono in [`deploy/`](deploy/) (`linux`,
 `macos`, `windows`, `docker`, `systemd`).
 
@@ -91,7 +91,7 @@ bkpo notify-test    prova i notifier configurati
 bkpo service        avvia sotto Windows Service Control Manager (solo Windows)
 ```
 
-Riferimento completo: [CLI](https://backuppo.garzuu.com/cli/).
+Riferimento completo: [CLI](https://garzuu.github.io/backuppo/cli/).
 
 ## Web UI
 
@@ -105,13 +105,13 @@ disponibile un wrapper desktop Tauri opzionale. Vedi la [guida alla UI](docs/ui.
 ## Documentazione
 
 La documentazione completa, in italiano e in inglese, è su
-**[backuppo.garzuu.com](https://backuppo.garzuu.com)**:
+**[garzuu.github.io/backuppo](https://garzuu.github.io/backuppo)**:
 
-- [Come funziona](https://backuppo.garzuu.com/come-funziona/) e [concetti](https://backuppo.garzuu.com/concetti/)
-- [Sorgenti](https://backuppo.garzuu.com/sorgenti/) e [destinazioni](https://backuppo.garzuu.com/destinazioni/)
-- [Restore](https://backuppo.garzuu.com/restore/) e [sicurezza](https://backuppo.garzuu.com/sicurezza/)
-- [Hub](https://backuppo.garzuu.com/hub/) e [deploy dell'hub](https://backuppo.garzuu.com/hub-deploy/)
-- [Aggiornamenti](https://backuppo.garzuu.com/updates/), [operatività](https://backuppo.garzuu.com/operativita/) e [troubleshooting](https://backuppo.garzuu.com/troubleshooting/)
+- [Come funziona](https://garzuu.github.io/backuppo/come-funziona/) e [concetti](https://garzuu.github.io/backuppo/concetti/)
+- [Sorgenti](https://garzuu.github.io/backuppo/sorgenti/) e [destinazioni](https://garzuu.github.io/backuppo/destinazioni/)
+- [Restore](https://garzuu.github.io/backuppo/restore/) e [sicurezza](https://garzuu.github.io/backuppo/sicurezza/)
+- [Hub](https://garzuu.github.io/backuppo/hub/) e [deploy dell'hub](https://garzuu.github.io/backuppo/hub-deploy/)
+- [Aggiornamenti](https://garzuu.github.io/backuppo/updates/), [operatività](https://garzuu.github.io/backuppo/operativita/) e [troubleshooting](https://garzuu.github.io/backuppo/troubleshooting/)
 
 ## Licenza
 

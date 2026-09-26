@@ -2,8 +2,8 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
-const site = process.env.DOCS_SITE ?? 'https://backuppo.garzuu.com';
-const base = process.env.DOCS_BASE ?? '/';
+const site = process.env.DOCS_SITE ?? 'https://garzuu.github.io';
+const base = process.env.DOCS_BASE ?? '/backuppo';
 
 export default defineConfig({
   site,
