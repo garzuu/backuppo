@@ -2,12 +2,13 @@ mod validate;
 
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 pub use validate::{validate, ConfigError};
 
 /// Configurazione completa letta da un file YAML.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Config {
     #[serde(default)]
     pub destinations: HashMap<String, DestinationConfig>,
@@ -27,7 +28,7 @@ pub struct Config {
     pub api: Option<ApiConfig>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ApiConfig {
     /// Indirizzo di ascolto. Per sicurezza deve essere loopback.
     #[serde(default = "default_api_bind")]
@@ -38,7 +39,7 @@ fn default_api_bind() -> String {
     "127.0.0.1:8787".to_string()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ObservabilityConfig {
     /// Database SQLite locale delle esecuzioni.
     pub history_path: String,
@@ -47,7 +48,7 @@ pub struct ObservabilityConfig {
     pub status_page: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ReportConfig {
     /// Schedule cron standard a cinque campi.
     pub schedule: String,
@@ -70,7 +71,7 @@ impl Config {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DestinationConfig {
     Fs {
@@ -212,7 +213,7 @@ fn default_sftp_port() -> u16 {
 
 /// Retry con backoff esponenziale sulle operazioni di rete verso una
 /// destination remota.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RetryConfig {
     #[serde(default = "default_retry_max_times")]
     pub max_times: usize,
@@ -230,7 +231,7 @@ fn default_retry_max_times() -> usize {
     3
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NotifierConfig {
     Telegram {
@@ -291,7 +292,7 @@ fn default_hub_queue_path() -> String {
     "backuppo-hub-queue.sqlite".to_string()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SourceConfig {
     Folder {
@@ -373,7 +374,7 @@ fn default_virsh_binary() -> String {
     "virsh".to_string()
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EngineKind {
     #[default]
@@ -381,14 +382,14 @@ pub enum EngineKind {
     Restic,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Compression {
     Zstd,
     None,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EncryptionConfig {
     Age {
@@ -400,7 +401,7 @@ pub enum EncryptionConfig {
     None,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum VerifyRestore {
     Never,
@@ -409,7 +410,7 @@ pub enum VerifyRestore {
     Weekly,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct Retention {
     #[serde(default)]
     pub daily: Option<u32>,
@@ -419,7 +420,7 @@ pub struct Retention {
     pub monthly: Option<u32>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct NotifyConfig {
     #[serde(default)]
     pub on_success: Vec<String>,
@@ -429,7 +430,7 @@ pub struct NotifyConfig {
     pub on_verify: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct JobConfig {
     pub source: SourceConfig,
     pub destination: String,

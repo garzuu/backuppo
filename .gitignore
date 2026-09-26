@@ -1,2 +1,6 @@
 /target
+/apps/web/node_modules
+/apps/web/*.tsbuildinfo
+/apps/desktop/src-tauri/target
+/apps/desktop/src-tauri/gen/schemas
 .DS_Store

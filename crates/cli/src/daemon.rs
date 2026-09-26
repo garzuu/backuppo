@@ -1,38 +1,96 @@
-use std::collections::HashMap;
 use std::future::Future;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use backuppo_core::config::Config;
-use tokio::sync::Mutex;
+use tokio::sync::watch;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{info, warn};
 
 /// Avvia il daemon: registra ogni job configurato sullo scheduler cron-like
 /// e resta in esecuzione finché non arriva un segnale di arresto
 /// (SIGTERM o Ctrl+C), poi effettua uno shutdown pulito.
-pub async fn run(config: Config) -> Result<()> {
-    run_until(config, wait_for_shutdown_signal()).await
+pub async fn run(config: Config, config_path: PathBuf) -> Result<()> {
+    run_until_path(config, Some(config_path), wait_for_shutdown_signal()).await
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) async fn run_until<F>(config: Config, shutdown: F) -> Result<()>
 where
     F: Future<Output = ()>,
 {
-    let config = Arc::new(config);
-    // Un lock per job: una nuova esecuzione schedulata viene saltata se la
-    // precedente per lo stesso job non è ancora terminata.
-    let locks: Arc<HashMap<String, Arc<Mutex<()>>>> = Arc::new(
-        config
-            .jobs
-            .keys()
-            .map(|name| (name.clone(), Arc::new(Mutex::new(()))))
-            .collect(),
-    );
-    let api_handle = crate::api::spawn(Arc::clone(&config), Arc::clone(&locks)).await?;
-    #[cfg(feature = "hub")]
-    let hub_handles = spawn_hub_tasks(Arc::clone(&config), Arc::clone(&locks));
+    run_until_path(config, None, shutdown).await
+}
 
+async fn run_until_path<F>(config: Config, config_path: Option<PathBuf>, shutdown: F) -> Result<()>
+where
+    F: Future<Output = ()>,
+{
+    let config = Arc::new(config);
+    let locks = crate::api::build_locks(&config);
+    let (reload_tx, mut reload_rx) = watch::channel(Arc::clone(&config));
+    let runtime = crate::api::RuntimeState::new(
+        Arc::clone(&config),
+        config_path,
+        Arc::clone(&locks),
+        Some(reload_tx),
+        crate::api::RuntimeMode::Daemon,
+    );
+    let api_handle = crate::api::spawn(runtime).await?;
+    let mut config = config;
+    #[cfg(feature = "hub")]
+    let mut hub_handles = spawn_hub_tasks(Arc::clone(&config), Arc::clone(&locks));
+    let mut scheduler = start_scheduler(Arc::clone(&config), Arc::clone(&locks)).await?;
+
+    info!(
+        jobs = config.jobs.len(),
+        reports = config.reports.len(),
+        "daemon avviato"
+    );
+
+    tokio::pin!(shutdown);
+    loop {
+        tokio::select! {
+            _ = &mut shutdown => break,
+            changed = reload_rx.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+                let next = reload_rx.borrow_and_update().clone();
+                scheduler.shutdown().await.context("shutdown scheduler durante reload")?;
+                #[cfg(feature = "hub")]
+                for handle in hub_handles.drain(..) {
+                    handle.abort();
+                }
+                scheduler = start_scheduler(Arc::clone(&next), Arc::clone(&locks)).await?;
+                #[cfg(feature = "hub")]
+                {
+                    hub_handles = spawn_hub_tasks(Arc::clone(&next), Arc::clone(&locks));
+                }
+                config = next;
+                info!(jobs = config.jobs.len(), reports = config.reports.len(), "configurazione applicata al daemon");
+            }
+        }
+    }
+
+    info!("segnale di arresto ricevuto, shutdown in corso");
+    scheduler
+        .shutdown()
+        .await
+        .context("errore durante lo shutdown dello scheduler")?;
+    if let Some(handle) = api_handle {
+        handle.abort();
+    }
+    #[cfg(feature = "hub")]
+    for handle in hub_handles {
+        handle.abort();
+    }
+    info!("shutdown completato");
+    Ok(())
+}
+
+async fn start_scheduler(config: Arc<Config>, locks: crate::api::JobLocks) -> Result<JobScheduler> {
     let scheduler = JobScheduler::new()
         .await
         .context("impossibile creare lo scheduler")?;
@@ -89,35 +147,12 @@ where
         .start()
         .await
         .context("impossibile avviare lo scheduler")?;
-    info!(
-        jobs = config.jobs.len(),
-        reports = config.reports.len(),
-        "daemon avviato"
-    );
-
-    shutdown.await;
-    info!("segnale di arresto ricevuto, shutdown in corso");
-
-    let mut scheduler = scheduler;
-    scheduler
-        .shutdown()
-        .await
-        .context("errore durante lo shutdown dello scheduler")?;
-    if let Some(handle) = api_handle {
-        handle.abort();
-    }
-    #[cfg(feature = "hub")]
-    for handle in hub_handles {
-        handle.abort();
-    }
-    info!("shutdown completato");
-
-    Ok(())
+    Ok(scheduler)
 }
 
 /// Lock per job condivisi tra scheduler, API locale e comandi remoti.
 #[cfg(feature = "hub")]
-type Locks = Arc<HashMap<String, Arc<Mutex<()>>>>;
+type Locks = crate::api::JobLocks;
 
 /// Avvia, se in config è presente un notifier di tipo `hub`, un task che
 /// manda heartbeat periodici e ritenta l'invio degli eventi rimasti in coda
@@ -231,7 +266,7 @@ async fn execute_command(
         detail: Some(detail),
     };
     let job = command.job.as_str();
-    let Some(lock) = locks.get(job) else {
+    let Some(lock) = locks.read().expect("job locks poisoned").get(job).cloned() else {
         return failed(format!(
             "job '{job}' non presente nella config di questo agent"
         ));
@@ -260,12 +295,13 @@ async fn execute_command(
     }
 }
 
-async fn run_one_tick(
-    job_name: String,
-    config: Arc<Config>,
-    locks: Arc<HashMap<String, Arc<Mutex<()>>>>,
-) {
-    let Some(lock) = locks.get(&job_name) else {
+async fn run_one_tick(job_name: String, config: Arc<Config>, locks: crate::api::JobLocks) {
+    let Some(lock) = locks
+        .read()
+        .expect("job locks poisoned")
+        .get(&job_name)
+        .cloned()
+    else {
         warn!(job = %job_name, "job non trovato tra i lock registrati, salto il giro");
         return;
     };
@@ -319,7 +355,7 @@ mod tests {
     }
 
     fn build_config(src: &std::path::Path, dst: &std::path::Path) -> Config {
-        let mut destinations = HashMap::new();
+        let mut destinations = std::collections::HashMap::new();
         destinations.insert(
             "local".to_string(),
             DestinationConfig::Fs {
@@ -327,7 +363,7 @@ mod tests {
             },
         );
 
-        let mut jobs = HashMap::new();
+        let mut jobs = std::collections::HashMap::new();
         jobs.insert(
             "documents".to_string(),
             JobConfig {
@@ -351,22 +387,12 @@ mod tests {
 
         Config {
             destinations,
-            notifiers: HashMap::new(),
+            notifiers: std::collections::HashMap::new(),
             jobs,
             observability: None,
             reports: Vec::new(),
             api: None,
         }
-    }
-
-    fn build_locks(config: &Config) -> Arc<HashMap<String, Arc<Mutex<()>>>> {
-        Arc::new(
-            config
-                .jobs
-                .keys()
-                .map(|name| (name.clone(), Arc::new(Mutex::new(()))))
-                .collect(),
-        )
     }
 
     #[tokio::test]
@@ -376,10 +402,10 @@ mod tests {
         write_file(&src_dir.path().join("a.txt"), "contenuto di test");
 
         let config = Arc::new(build_config(src_dir.path(), dst_dir.path()));
-        let locks = build_locks(&config);
+        let locks = crate::api::build_locks(&config);
 
         // Simula un'esecuzione già in corso per "documents".
-        let lock = Arc::clone(locks.get("documents").unwrap());
+        let lock = locks.read().unwrap().get("documents").cloned().unwrap();
         let held_guard = lock.lock().await;
 
         run_one_tick(
@@ -407,13 +433,7 @@ mod tests {
 
     #[cfg(feature = "hub")]
     fn locks_for(config: &Config) -> Locks {
-        Arc::new(
-            config
-                .jobs
-                .keys()
-                .map(|name| (name.clone(), Arc::new(Mutex::new(()))))
-                .collect(),
-        )
+        crate::api::build_locks(config)
     }
 
     #[cfg(feature = "hub")]
@@ -478,7 +498,8 @@ mod tests {
         write_file(&src.join("a.txt"), "ciao");
         let config = build_config(&src, &dst);
         let locks = locks_for(&config);
-        let _running = locks["documents"].lock().await;
+        let lock = locks.read().unwrap().get("documents").cloned().unwrap();
+        let _running = lock.lock().await;
 
         let result =
             execute_command(&command(CommandKind::Run, "documents"), &config, &locks).await;

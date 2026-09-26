@@ -118,8 +118,8 @@ async fn main() -> Result<()> {
         Command::Run { config, job } => run(&config, &job).await,
         Command::Verify { config, job } => verify(&config, &job).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
-        Command::Daemon { config } => daemon::run(load_config(&config)?).await,
-        Command::Serve { config } => api::serve(load_config(&config)?).await,
+        Command::Daemon { config } => daemon::run(load_config(&config)?, config).await,
+        Command::Serve { config } => api::serve(load_config(&config)?, config).await,
         Command::Runs { config, limit } => runs(&config, limit),
         Command::Logs { config, id } => logs(&config, id),
         #[cfg(windows)]

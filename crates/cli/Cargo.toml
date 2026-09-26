@@ -23,6 +23,9 @@ chrono = "0.4.45"
 anyhow = "1.0.104"
 axum = "0.8.8"
 serde = { version = "1.0.229", features = ["derive"] }
+serde_yaml = "0.9.34"
+schemars = "1.0.4"
+tempfile = "3.27.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio = { version = "1.53.1", features = ["net", "rt-multi-thread", "macros", "signal", "sync"] }

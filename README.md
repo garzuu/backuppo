@@ -40,6 +40,15 @@ bkpo logs <id>   mostra il log di un'esecuzione
 bkpo notify-test prova i notifier configurati
 ```
 
+## Web UI
+
+La stessa interfaccia responsive è incorporata nell'agent e nell'hub. Sul
+singolo host permette di eseguire e verificare job, consultare storico e log
+e modificare la configurazione con validazione e reload sicuro. Sull'hub
+offre la vista multi-sito, i comandi remoti e l'amministrazione di utenti e
+token. È installabile come PWA; è disponibile anche un wrapper Tauri
+opzionale. Vedi la [guida alla UI](docs/ui.md).
+
 ## Licenza
 
 Distribuito con doppia licenza [MIT](LICENSE-MIT) oppure

@@ -1,0 +1,44 @@
+.guided-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.guided-grid details {
+  border: 1px solid #33415d;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.guided-grid summary {
+  cursor: pointer;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.form-group {
+  display: grid;
+  gap: 9px;
+  margin: 12px 0 6px;
+  padding-left: 12px;
+  border-left: 1px solid #2d3a55;
+}
+
+.form-row > label {
+  display: block;
+  margin-bottom: 5px;
+  color: #8e9ab0;
+  font-size: 12px;
+}
+
+.form-row input:not([type="checkbox"]),
+.form-row select {
+  width: min(100%, 620px);
+}
+
+select {
+  background: #0c1324;
+  border: 1px solid #33415d;
+  color: #edf3ff;
+  border-radius: 9px;
+  padding: 9px 12px;
+}

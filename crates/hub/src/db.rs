@@ -76,6 +76,21 @@ pub struct Site {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct AgentToken {
+    pub id: i64,
+    pub site_id: i64,
+    pub created_at: i64,
+    pub revoked_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UserSummary {
+    pub id: i64,
+    pub username: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Execution {
     pub id: i64,
     pub site_id: i64,
@@ -432,6 +447,23 @@ impl Db {
         Ok(changed > 0)
     }
 
+    pub fn list_agent_tokens(&self, site_id: i64) -> Result<Vec<AgentToken>> {
+        let connection = self.connect()?;
+        let mut statement = connection.prepare(
+            "SELECT id, site_id, created_at, revoked_at
+             FROM agent_tokens WHERE site_id = ?1 ORDER BY id DESC",
+        )?;
+        let rows = statement.query_map([site_id], |row| {
+            Ok(AgentToken {
+                id: row.get(0)?,
+                site_id: row.get(1)?,
+                created_at: row.get(2)?,
+                revoked_at: row.get(3)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
     /// Sito associato a un token agent attivo (non revocato), per hash.
     pub fn site_for_agent_token(&self, token_hash: &str) -> Result<Option<Site>> {
         let connection = self.connect()?;
@@ -458,6 +490,20 @@ impl Db {
             params![username, password_hash, role.as_str()],
         )?;
         Ok(connection.last_insert_rowid())
+    }
+
+    pub fn list_users(&self) -> Result<Vec<UserSummary>> {
+        let connection = self.connect()?;
+        let mut statement =
+            connection.prepare("SELECT id, username, role FROM users ORDER BY username ASC")?;
+        let rows = statement.query_map([], |row| {
+            Ok(UserSummary {
+                id: row.get(0)?,
+                username: row.get(1)?,
+                role: row.get(2)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn username_by_id(&self, id: i64) -> Result<Option<String>> {

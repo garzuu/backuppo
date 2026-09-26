@@ -12,6 +12,7 @@ hub = []
 [dependencies]
 async-trait = "0.1.92"
 cron = "0.17.0"
+schemars = "1.0.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_yaml = "0.9.34"
 thiserror = "2.0.20"

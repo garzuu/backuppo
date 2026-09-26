@@ -82,6 +82,7 @@ async fn serve(config_path: &Path) -> Result<()> {
         notifiers: Arc::new(config.notifiers),
         notify_on_offline: Arc::new(config.notify_on_offline),
         notify_on_failure: Arc::new(config.notify_on_failure),
+        browser_csrf: Arc::new(auth::generate_opaque_token().0),
     };
 
     tokio::spawn(offline::run(state.clone()));

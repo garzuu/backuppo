@@ -289,6 +289,12 @@ alternativa usa `bkpo serve --config config.yaml`. L'API espone
 accetta solo indirizzi IP loopback. La richiesta `POST` richiede anche
 l'header `X-Backuppo-UI: 1`, usato dalla UI per impedire trigger cross-site.
 
+La UI corrente usa azioni asincrone tramite
+`POST /api/v1/jobs/{nome}/actions`, supporta anche verifica restore, test dei
+notifier e gli endpoint `/api/v1/config/*` per validare, salvare e applicare
+la configurazione. Le mutazioni richiedono il token CSRF restituito da
+`GET /api/v1/session`. Vedi [ui.md](ui.md) per il flusso completo.
+
 ## Log
 
 I log vanno su **stderr** (stdout è riservato ai risultati dei comandi) e

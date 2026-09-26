@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use axum::http::{header::AUTHORIZATION, HeaderMap, StatusCode};
-use axum::response::Html;
+use axum::http::{header::AUTHORIZATION, header::SET_COOKIE, HeaderMap, HeaderValue, StatusCode};
+use axum::response::{Html, IntoResponse};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use backuppo_core::config::NotifierConfig;
@@ -14,8 +14,8 @@ use backuppo_core::model::JobEvent;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{self, Claims};
-use crate::db::{Command, Customer, Db, NewExecution, Role, Site};
-use crate::web::INDEX_HTML;
+use crate::db::{AgentToken, Command, Customer, Db, NewExecution, Role, Site, UserSummary};
+use crate::web::{APP_CSS, APP_JS, INDEX_HTML, MANIFEST, SERVICE_WORKER};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -27,6 +27,7 @@ pub struct AppState {
     pub notifiers: Arc<HashMap<String, NotifierConfig>>,
     pub notify_on_offline: Arc<Vec<String>>,
     pub notify_on_failure: Arc<Vec<String>>,
+    pub browser_csrf: Arc<String>,
 }
 
 type ApiError = (StatusCode, String);
@@ -34,11 +35,23 @@ type ApiError = (StatusCode, String);
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(index))
+        .route("/app.js", get(app_js))
+        .route("/app.css", get(app_css))
+        .route("/manifest.webmanifest", get(manifest))
+        .route("/sw.js", get(service_worker))
+        .route("/api/v1/capabilities", get(capabilities))
+        .route(
+            "/api/v1/session",
+            get(browser_session).delete(browser_logout),
+        )
+        .route("/api/v1/session/login", post(browser_login))
+        .route("/api/v1/session/refresh", post(browser_refresh))
         .route("/v1/auth/login", post(login))
         .route("/v1/auth/refresh", post(refresh))
         .route("/v1/events", post(ingest_event))
         .route("/v1/heartbeat", post(heartbeat))
         .route("/v1/customers", get(list_customers).post(create_customer))
+        .route("/v1/users", get(list_users).post(create_user))
         .route("/v1/sites", get(list_sites).post(create_site))
         .route("/v1/sites/{id}/executions", get(list_executions_for_site))
         .route("/v1/sites/{id}/jobs", get(list_jobs_for_site))
@@ -48,9 +61,35 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/commands/pending", get(pending_commands))
         .route("/v1/commands/{id}/result", post(command_result))
-        .route("/v1/sites/{id}/tokens", post(create_agent_token))
+        .route(
+            "/v1/sites/{id}/tokens",
+            get(list_agent_tokens).post(create_agent_token),
+        )
         .route(
             "/v1/sites/{id}/tokens/{token_id}",
+            delete(revoke_agent_token),
+        )
+        .route(
+            "/api/v1/customers",
+            get(list_customers).post(create_customer),
+        )
+        .route("/api/v1/users", get(list_users).post(create_user))
+        .route("/api/v1/sites", get(list_sites).post(create_site))
+        .route(
+            "/api/v1/sites/{id}/executions",
+            get(list_executions_for_site),
+        )
+        .route("/api/v1/sites/{id}/jobs", get(list_jobs_for_site))
+        .route(
+            "/api/v1/sites/{id}/commands",
+            get(list_commands).post(create_command),
+        )
+        .route(
+            "/api/v1/sites/{id}/tokens",
+            get(list_agent_tokens).post(create_agent_token),
+        )
+        .route(
+            "/api/v1/sites/{id}/tokens/{token_id}",
             delete(revoke_agent_token),
         )
         .with_state(state)
@@ -58,6 +97,166 @@ pub fn router(state: AppState) -> Router {
 
 async fn index() -> Html<&'static str> {
     Html(INDEX_HTML)
+}
+
+async fn app_js() -> impl IntoResponse {
+    ([("content-type", "text/javascript; charset=utf-8")], APP_JS)
+}
+
+async fn app_css() -> impl IntoResponse {
+    ([("content-type", "text/css; charset=utf-8")], APP_CSS)
+}
+
+async fn manifest() -> impl IntoResponse {
+    ([("content-type", "application/manifest+json")], MANIFEST)
+}
+
+async fn service_worker() -> impl IntoResponse {
+    (
+        [
+            ("content-type", "text/javascript; charset=utf-8"),
+            ("cache-control", "no-cache"),
+        ],
+        SERVICE_WORKER,
+    )
+}
+
+#[derive(Serialize)]
+struct Capabilities {
+    mode: &'static str,
+    api_version: &'static str,
+    product_version: &'static str,
+    features: Vec<&'static str>,
+    auth: &'static str,
+}
+
+async fn capabilities() -> Json<Capabilities> {
+    Json(Capabilities {
+        mode: "hub",
+        api_version: "v1",
+        product_version: env!("CARGO_PKG_VERSION"),
+        features: vec!["customers", "sites", "executions", "commands", "tokens"],
+        auth: "bearer",
+    })
+}
+
+#[derive(Serialize)]
+struct BrowserSession {
+    authenticated: bool,
+    csrf_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+}
+
+async fn browser_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Json<BrowserSession> {
+    let claims = require_user(&headers, &state.jwt_secret).ok();
+    Json(BrowserSession {
+        authenticated: claims.is_some(),
+        csrf_token: state.browser_csrf.as_ref().clone(),
+        role: claims.map(|claims| claims.role),
+    })
+}
+
+async fn browser_login(
+    State(state): State<AppState>,
+    Json(body): Json<LoginRequest>,
+) -> Result<(HeaderMap, Json<BrowserSession>), ApiError> {
+    let user = state
+        .db
+        .user_by_username(&body.username)
+        .map_err(internal_error)?
+        .filter(|(_, hash, _)| auth::verify_password(&body.password, hash))
+        .ok_or((
+            StatusCode::UNAUTHORIZED,
+            "credenziali non valide".to_string(),
+        ))?;
+    let (user_id, _hash, role) = user;
+    let Json(tokens) = issue_token_pair(&state, user_id, role)?;
+    Ok((
+        session_cookies(&state, &tokens)?,
+        Json(BrowserSession {
+            authenticated: true,
+            csrf_token: state.browser_csrf.as_ref().clone(),
+            role: Some(role.as_str().into()),
+        }),
+    ))
+}
+
+async fn browser_refresh(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, Json<BrowserSession>), ApiError> {
+    require_browser_csrf(&headers, &state)?;
+    let refresh_token = cookie(&headers, "backuppo_refresh").ok_or((
+        StatusCode::UNAUTHORIZED,
+        "refresh cookie mancante".to_string(),
+    ))?;
+    let hash = auth::hash_opaque_token(refresh_token);
+    let (user_id, role) = state
+        .db
+        .consume_refresh_token(&hash, now())
+        .map_err(internal_error)?
+        .ok_or((StatusCode::UNAUTHORIZED, "sessione scaduta".to_string()))?;
+    let Json(tokens) = issue_token_pair(&state, user_id, role)?;
+    Ok((
+        session_cookies(&state, &tokens)?,
+        Json(BrowserSession {
+            authenticated: true,
+            csrf_token: state.browser_csrf.as_ref().clone(),
+            role: Some(role.as_str().into()),
+        }),
+    ))
+}
+
+async fn browser_logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, StatusCode), ApiError> {
+    require_browser_csrf(&headers, &state)?;
+    if let Some(refresh_token) = cookie(&headers, "backuppo_refresh") {
+        let hash = auth::hash_opaque_token(refresh_token);
+        let _ = state.db.consume_refresh_token(&hash, now());
+    }
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        SET_COOKIE,
+        HeaderValue::from_static(
+            "backuppo_access=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+        ),
+    );
+    response_headers.append(
+        SET_COOKIE,
+        HeaderValue::from_static(
+            "backuppo_refresh=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+        ),
+    );
+    Ok((response_headers, StatusCode::NO_CONTENT))
+}
+
+fn session_cookies(state: &AppState, tokens: &TokenPair) -> Result<HeaderMap, ApiError> {
+    let mut headers = HeaderMap::new();
+    let access_max_age = state.access_token_minutes * 60;
+    let refresh_max_age = state.refresh_token_days * 24 * 3600;
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&format!(
+            "backuppo_access={}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={access_max_age}",
+            tokens.access_token
+        ))
+        .map_err(internal_error)?,
+    );
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&format!(
+            "backuppo_refresh={}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={refresh_max_age}",
+            tokens.refresh_token
+        ))
+        .map_err(internal_error)?,
+    );
+    Ok(headers)
 }
 
 fn now() -> i64 {
@@ -69,11 +268,42 @@ fn internal_error(error: impl std::fmt::Display) -> ApiError {
 }
 
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    if let Some(token) = headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+    {
+        Some(token)
+    } else {
+        cookie(headers, "backuppo_access")
+    }
+}
+
+fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers
-        .get(AUTHORIZATION)?
+        .get("cookie")?
         .to_str()
         .ok()?
-        .strip_prefix("Bearer ")
+        .split(';')
+        .find_map(|item| {
+            let (key, value) = item.trim().split_once('=')?;
+            (key == name).then_some(value)
+        })
+}
+
+fn require_browser_csrf(headers: &HeaderMap, state: &AppState) -> Result<(), ApiError> {
+    if headers.contains_key(AUTHORIZATION) {
+        return Ok(());
+    }
+    let valid = headers
+        .get("x-backuppo-csrf")
+        .and_then(|value| value.to_str().ok())
+        == Some(state.browser_csrf.as_str());
+    if valid {
+        Ok(())
+    } else {
+        Err((StatusCode::FORBIDDEN, "token CSRF non valido".into()))
+    }
 }
 
 /// Autentica una richiesta dell'agent tramite il token opaco del sito.
@@ -265,6 +495,7 @@ async fn create_customer(
     headers: HeaderMap,
     Json(body): Json<CreateCustomerRequest>,
 ) -> Result<Json<Customer>, ApiError> {
+    require_browser_csrf(&headers, &state)?;
     let claims = require_user(&headers, &state.jwt_secret)?;
     require_admin(&claims)?;
     state
@@ -272,6 +503,56 @@ async fn create_customer(
         .create_customer(&body.name)
         .map(Json)
         .map_err(internal_error)
+}
+
+// --- utenti --------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CreateUserRequest {
+    username: String,
+    password: String,
+    role: String,
+}
+
+async fn list_users(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<UserSummary>>, ApiError> {
+    let claims = require_user(&headers, &state.jwt_secret)?;
+    require_admin(&claims)?;
+    state.db.list_users().map(Json).map_err(internal_error)
+}
+
+async fn create_user(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CreateUserRequest>,
+) -> Result<(StatusCode, Json<UserSummary>), ApiError> {
+    require_browser_csrf(&headers, &state)?;
+    let claims = require_user(&headers, &state.jwt_secret)?;
+    require_admin(&claims)?;
+    let username = body.username.trim();
+    if username.is_empty() || username.len() > 100 || body.password.len() < 10 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "username non valido o password più corta di 10 caratteri".into(),
+        ));
+    }
+    let role =
+        Role::parse(&body.role).ok_or((StatusCode::BAD_REQUEST, "ruolo non valido".into()))?;
+    let password_hash = auth::hash_password(&body.password).map_err(internal_error)?;
+    let id = state
+        .db
+        .create_user(username, &password_hash, role)
+        .map_err(internal_error)?;
+    Ok((
+        StatusCode::CREATED,
+        Json(UserSummary {
+            id,
+            username: username.into(),
+            role: role.as_str().into(),
+        }),
+    ))
 }
 
 // --- siti ---------------------------------------------------------------
@@ -301,6 +582,7 @@ async fn create_site(
     headers: HeaderMap,
     Json(body): Json<CreateSiteRequest>,
 ) -> Result<Json<SiteWithToken>, ApiError> {
+    require_browser_csrf(&headers, &state)?;
     let claims = require_user(&headers, &state.jwt_secret)?;
     require_admin(&claims)?;
     let site = state
@@ -324,11 +606,31 @@ struct AgentTokenResponse {
     token_id: i64,
 }
 
+async fn list_agent_tokens(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(site_id): Path<i64>,
+) -> Result<Json<Vec<AgentToken>>, ApiError> {
+    let claims = require_user(&headers, &state.jwt_secret)?;
+    require_admin(&claims)?;
+    state
+        .db
+        .get_site(site_id)
+        .map_err(internal_error)?
+        .ok_or((StatusCode::NOT_FOUND, "sito non trovato".to_string()))?;
+    state
+        .db
+        .list_agent_tokens(site_id)
+        .map(Json)
+        .map_err(internal_error)
+}
+
 async fn create_agent_token(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(site_id): Path<i64>,
 ) -> Result<Json<AgentTokenResponse>, ApiError> {
+    require_browser_csrf(&headers, &state)?;
     let claims = require_user(&headers, &state.jwt_secret)?;
     require_admin(&claims)?;
     state
@@ -352,6 +654,7 @@ async fn revoke_agent_token(
     headers: HeaderMap,
     Path((site_id, token_id)): Path<(i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    require_browser_csrf(&headers, &state)?;
     let claims = require_user(&headers, &state.jwt_secret)?;
     require_admin(&claims)?;
     let revoked = state
@@ -388,6 +691,7 @@ async fn create_command(
     Path(site_id): Path<i64>,
     Json(body): Json<CreateCommandRequest>,
 ) -> Result<(StatusCode, Json<Command>), ApiError> {
+    require_browser_csrf(&headers, &state)?;
     let claims = require_user(&headers, &state.jwt_secret)?;
     require_operator(&claims)?;
     let job = body.job.trim();
@@ -531,6 +835,7 @@ mod tests {
             notifiers: Arc::new(HashMap::new()),
             notify_on_offline: Arc::new(Vec::new()),
             notify_on_failure: Arc::new(Vec::new()),
+            browser_csrf: Arc::new("test-csrf".to_string()),
         }
     }
 
@@ -565,6 +870,31 @@ mod tests {
         )
         .await;
         assert_eq!(err.unwrap_err().0, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn browser_login_uses_http_only_cookies() {
+        let state = test_state();
+        let hash = auth::hash_password("very-secret-password").unwrap();
+        state.db.create_user("admin", &hash, Role::Admin).unwrap();
+
+        let (response_headers, Json(session)) = browser_login(
+            State(state.clone()),
+            Json(LoginRequest {
+                username: "admin".into(),
+                password: "very-secret-password".into(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert!(session.authenticated);
+        let cookies: Vec<_> = response_headers.get_all(SET_COOKIE).iter().collect();
+        assert_eq!(cookies.len(), 2);
+        assert!(cookies.iter().all(|value| value
+            .to_str()
+            .unwrap()
+            .contains("HttpOnly; Secure; SameSite=Strict")));
     }
 
     #[tokio::test]

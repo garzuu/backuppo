@@ -299,6 +299,23 @@ Obiettivo: chi arriva sul sito capisce in 30 secondi cosa fa Backuppo e come si 
 
 ---
 
+## Fase 13 — UI web-first
+
+- [x] SPA React/TypeScript condivisa tra agent e hub, incorporata nei binari
+- [x] Dashboard agent, storico/log e run/verify asincroni
+- [x] Validazione, salvataggio atomico e reload esplicito della config locale
+- [x] Dashboard hub, comandi remoti e amministrazione utenti/token
+- [x] PWA con cache limitata all'app shell
+- [x] Sessione browser hub con cookie HttpOnly e protezione CSRF
+- [x] Wrapper Tauri opzionale senza sidecar agent
+- [ ] Form guidati completi per ogni variante di source/destination/notifier
+- [ ] Test end-to-end Playwright su viewport desktop e mobile
+
+L'app Flutter viene mantenuta solo durante la transizione e potrà essere
+archiviata dopo la parità mobile e la verifica ntfy della PWA.
+
+---
+
 ## Regole di qualità (valgono sempre)
 
 - Nessun `unwrap()`/`expect()` fuori dai test: ogni errore va propagato o loggato.
