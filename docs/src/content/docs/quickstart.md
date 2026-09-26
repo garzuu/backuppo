@@ -75,7 +75,7 @@ Apri PowerShell come amministratore ed esegui:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\deploy\windows\install-service.ps1 -BinaryPath .\bkpo.exe -ConfigPath .\config.yaml
+.\deploy\windows\install-agent.ps1 -BinaryPath .\bkpo.exe -ConfigPath .\config.yaml
 Get-Service Backuppo
 ```
 

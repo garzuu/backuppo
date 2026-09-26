@@ -3,6 +3,21 @@ title: Manual restore
 description: How to decrypt, decompress and restore a backup without using bkpo.
 ---
 
+The recommended path uses Backuppo's safe recovery primitives:
+
+```sh
+bkpo snapshots --config config.yaml --job documents
+bkpo browse --config config.yaml --job documents --snapshot latest
+bkpo restore --config config.yaml --job documents --snapshot latest \
+  --target /srv/restore-test
+```
+
+The target must be new or empty; `--overwrite` requires explicit approval.
+`--dry-run` counts files and bytes without writing, and `--include path` can be
+repeated for selective recovery.
+
+The following procedure remains the emergency path without the binary.
+
 Keep a copy of the configuration and secret variables separate from the
 backups. Without the `age` passphrase, an encrypted archive cannot be
 recovered.

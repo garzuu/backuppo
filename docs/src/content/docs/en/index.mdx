@@ -3,24 +3,29 @@ title: Backuppo
 description: Open source, cross-platform backup with automatic restore verification.
 template: splash
 hero:
-  tagline: Have you ever tried restoring? Backuppo automatically verifies every backup, not just runs it.
+  tagline: Verified backups, on one machine or a hundred. The Agent protects data; the optional Hub monitors every site.
+  image:
+    file: ../../../../../apps/web/public/backuppo-squirrel-512.png
+    alt: The Backuppo squirrel
   actions:
-    - text: Quickstart
-      link: /en/quickstart/
+    - text: How it works
+      link: ./come-funziona/
       icon: right-arrow
       variant: primary
-    - text: View on GitHub
-      link: https://github.com/garzuu/backuppo
-      icon: external
+    - text: Install
+      link: ./installazione/
+      icon: download
+    - text: First backup
+      link: ./quickstart/
+      icon: right-arrow
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## What is Backuppo
 
-A general-purpose backup tool for Linux, Windows and macOS, distributed as a
-single static binary. Git-versionable YAML configuration, notifications via
-SMTP, Telegram, webhook and ntfy.
+A self-hosted backup system for Linux, Windows, macOS and Docker. Each Agent
+can work on its own or send status and metadata only to a central Hub.
 
 <CardGrid stagger>
 	<Card title="Automatic restore verification" icon="approve-check">
@@ -39,7 +44,15 @@ SMTP, Telegram, webhook and ntfy.
 	</Card>
 	<Card title="Optional multi-site hub" icon="open-book">
 		The agent always works stand-alone. An optional hub collects state and
-		metadata from multiple sites, with offline detection and a Flutter
-		monitoring app.
+		metadata from multiple sites, detects offline installations and supports
+		strictly limited remote operations.
 	</Card>
 </CardGrid>
+
+## Choose your path
+
+- **One machine:** install the [Agent](./installazione/), configure one or
+  more jobs with the [wizard](./wizard-job/) and remain stand-alone.
+- **Several sites or customers:** install an Agent at every site and deploy a
+  central [Hub](./hub/). Backup data never passes through it.
+- **Need your data back:** go straight to the [restore guide](./restore/).

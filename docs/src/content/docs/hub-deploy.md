@@ -30,6 +30,8 @@ Copiare `examples/hub-config.yaml` e adattarlo. Campi principali:
 - `jwt_secret_env`: variabile d'ambiente con il segreto per firmare i JWT
   di accesso. Generarlo con `openssl rand -hex 32` e non inserirlo mai nel
   file di config.
+- `policy_signing_key_env`: seed Ed25519 base64 di 32 byte usato solo per
+  firmare le policy (`openssl rand -base64 32`).
 - `offline_after_minutes`: soglia oltre la quale un sito senza heartbeat
   viene marcato offline e notificato.
 - `notifiers` / `notify_on_offline` / `notify_on_failure`: stesso formato
@@ -61,6 +63,7 @@ agent, vedi sotto) o `read_only` (solo lettura di stato ed esecuzioni).
 
 ```sh
 export HUB_JWT_SECRET='...'
+export HUB_POLICY_SIGNING_KEY='...'
 backuppo-hub serve --config /etc/backuppo-hub/config.yaml
 ```
 
@@ -85,6 +88,9 @@ refresh token rotante.
 | GET/POST | `/v1/sites/{id}/commands` | utente / admin, operator | ultimi 50 comandi del sito / richiesta `{"kind": "run"\|"verify", "job": "..."}` (409 se già in corso) |
 | GET | `/v1/commands/pending` | token agent | l'agent ritira i suoi comandi in attesa (ognuno una sola volta) |
 | POST | `/v1/commands/{id}/result` | token agent | l'agent riporta l'esito `{"ok": bool, "detail": "..."}` |
+| GET/POST | `/v1/sites/{id}/policies` | utente / admin | storico e pubblicazione policy firmate |
+| GET | `/v1/policy/current` | token agent | policy corrente del proprio sito |
+| GET | `/v1/policy/public-key` | — | chiave pubblica Ed25519 da configurare sull'agent |
 | POST | `/v1/sites/{id}/tokens` | admin | genera un nuovo token agent per il sito (ritorna anche `token_id`) |
 | DELETE | `/v1/sites/{id}/tokens/{token_id}` | admin | revoca un token agent |
 
@@ -127,6 +133,7 @@ docker run -d --name backuppo-hub \
   -v /srv/backuppo-hub/config.yaml:/etc/backuppo-hub/config.yaml:ro \
   -v backuppo-hub-data:/var/lib/backuppo-hub \
   -e HUB_JWT_SECRET='...' \
+  -e HUB_POLICY_SIGNING_KEY='...' \
   -p 127.0.0.1:8080:8080 \
   backuppo-hub:local
 ```

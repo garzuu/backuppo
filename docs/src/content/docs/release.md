@@ -35,3 +35,19 @@ l'immagine multiarch su GHCR e crea la release GitHub.
 La pipeline rifiuta un tag che non coincide con la versione del crate
 `backuppo`. La pubblicazione su crates.io è un'operazione separata e permanente;
 non è eseguita automaticamente dalla pipeline GitHub.
+
+## Firma degli aggiornamenti
+
+Il job release richiede il secret GitHub `UPDATE_SIGNING_KEY_B64`, contenente
+una chiave privata Ed25519 PEM codificata base64. La chiave si genera una sola
+volta e va conservata offline:
+
+```sh
+openssl genpkey -algorithm ED25519 -out update-signing-key.pem
+base64 < update-signing-key.pem
+openssl pkey -in update-signing-key.pem -pubout -outform DER | tail -c 32 | base64
+```
+
+L'ultimo valore è `updates.public_key` e va distribuito separatamente dagli
+artefatti. La pipeline pubblica binari raw, `update-stable.json` e la relativa
+firma; una chiave mancante fa fallire la release.

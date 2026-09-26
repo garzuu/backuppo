@@ -3,6 +3,21 @@ title: Restore manuale
 description: Come decifrare, decomprimere e ripristinare un backup senza usare bkpo.
 ---
 
+Il percorso consigliato usa le primitive sicure integrate:
+
+```sh
+bkpo snapshots --config config.yaml --job documents
+bkpo browse --config config.yaml --job documents --snapshot latest
+bkpo restore --config config.yaml --job documents --snapshot latest \
+  --target /srv/restore-test
+```
+
+La destinazione deve essere nuova o vuota; `--overwrite` richiede
+un'autorizzazione esplicita. `--dry-run` calcola file e byte senza scrivere, e
+`--include percorso` può essere ripetuto per un restore selettivo.
+
+La procedura seguente resta il percorso di emergenza senza il binario.
+
 Conserva una copia della configurazione e delle variabili dei segreti separata
 dai backup. Senza la passphrase `age`, un archivio cifrato non è recuperabile.
 

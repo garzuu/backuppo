@@ -88,8 +88,9 @@ continuativo configura anche refresh token, client ID e client secret:
 
 ### Restic incrementale
 
-Restic conserva chunk deduplicati e snapshot incrementali. Il binario `restic`
-deve essere nel `PATH`; `initialize` crea il repository al primo backup.
+Restic conserva chunk deduplicati e snapshot incrementali. Le release Backuppo
+includono una versione verificata accanto a `bkpo`; `binary` può indicarne una
+alternativa. `initialize` crea il repository al primo backup.
 
 ```yaml
   incremental:
@@ -97,12 +98,34 @@ deve essere nel `PATH`; `initialize` crea il repository al primo backup.
     repository: s3:https://s3.example.com/backups/restic
     password_env: RESTIC_PASSWORD
     initialize: true
+    append_only: true
     environment:
-      AWS_ACCESS_KEY_ID: S3_ACCESS_KEY_ID
-      AWS_SECRET_ACCESS_KEY: S3_SECRET_ACCESS_KEY
+      AWS_ACCESS_KEY_ID: S3_BACKUP_ACCESS_KEY
+      AWS_SECRET_ACCESS_KEY: S3_BACKUP_SECRET_KEY
+    maintenance_environment:
+      AWS_ACCESS_KEY_ID: S3_ADMIN_ACCESS_KEY
+      AWS_SECRET_ACCESS_KEY: S3_ADMIN_SECRET_KEY
+    object_lock:
+      bucket: backups
+      region: eu-central-1
+      endpoint: https://s3.example.com
+      access_key_id_env: S3_LOCK_CHECK_ACCESS_KEY
+      secret_access_key_env: S3_LOCK_CHECK_SECRET_KEY
+      expected_mode: compliance
+      minimum_retention_days: 30
 ```
 
-I valori di `environment` sono nomi di variabili, mai segreti letterali.
+I valori delle mappe sono nomi di variabili, mai segreti letterali. Con
+`append_only: true` l'agent non esegue `forget` o `prune`. La manutenzione
+manuale usa esclusivamente `maintenance_environment`:
+
+```bash
+bkpo maintain --config /etc/backuppo/config.yaml --job home-documents
+bkpo storage-check --config /etc/backuppo/config.yaml --job home-documents
+```
+
+`storage-check` firma una richiesta S3 `GetObjectLockConfiguration` e fallisce
+se Object Lock, modalità o durata minima non corrispondono alla policy attesa.
 
 ## Sorgenti
 
@@ -153,7 +176,7 @@ jobs:
   documents:
     source: { type: folder, path: /srv/documents }
     destination: local
-    engine: archive               # archive (default) | restic
+    engine: restic                # default del wizard; archive resta compatibile
     compression: zstd            # zstd | none; default zstd
     encryption:
       type: age                  # age | none
@@ -172,6 +195,11 @@ jobs:
       on_failure: [ops-email, ops-telegram]
       on_verify: [ops-email]
 ```
+
+Con il motore `archive`, `age` accetta esattamente uno tra `passphrase_env` e
+`key_env`. `key_env` deve contenere una identità privata X25519
+`AGE-SECRET-KEY-...`; Backuppo deriva il recipient pubblico per cifrare e usa
+la stessa identità per il restore.
 
 Con `engine: restic`, `destination` deve riferirsi a una destination
 `type: restic`; compressione e cifratura sono gestite da Restic.
@@ -226,9 +254,9 @@ l'iscrizione al topic) e iscriviti allo stesso topic.
 
 ### Hub multi-sito (opt-in)
 
-Disponibile solo nei binari compilati con la feature Cargo `hub`
-(`cargo build --features hub`); nei binari di release standard il tipo
-`hub` non esiste nemmeno a livello di parsing della config.
+La feature Cargo `hub` è inclusa nei binari ufficiali. Per un agent minimale
+completamente stand-alone si può compilare con `--no-default-features`: in
+quel caso il tipo `hub` non esiste nemmeno nel parsing della configurazione.
 
 ```yaml
 notifiers:
@@ -240,6 +268,10 @@ notifiers:
     queue_path: /var/lib/backuppo/hub-queue.sqlite  # default: ./backuppo-hub-queue.sqlite
     remote_commands: false       # default: false (vedi sotto)
     command_poll_seconds: 15     # default: 15, usato solo con remote_commands
+    policy_public_key: BASE64_ED25519_PUBLIC_KEY
+    policy_site_id: 1
+    policy_state_path: /var/lib/backuppo/policy-state.json
+    policy_poll_seconds: 300
 ```
 
 L'agent manda all'hub solo metadati (esito, byte, checksum, errore),
@@ -258,6 +290,11 @@ apre mai connessioni verso l'agent. Sicurezza: il comando può solo scegliere
 tra backup e verifica su un job **già presente in questa config** (mai un
 comando arbitrario), rispetta il lock per job (se il job è già in
 esecuzione la richiesta fallisce) ed è disattivato di default.
+
+Con `policy_public_key` l'agent scarica solo policy firmate per il proprio
+sito. Sequenze precedenti o riutilizzate con contenuto diverso vengono
+rifiutate. Una policy `block` non conforme sospende scheduler, avvii dalla UI
+e comandi remoti; `audit` registra invece le violazioni senza fermare i job.
 
 ## Storico, pagina di stato e report
 
@@ -286,7 +323,9 @@ Il daemon avvia automaticamente l'interfaccia su quell'indirizzo. In
 alternativa usa `bkpo serve --config config.yaml`. L'API espone
 `GET /api/v1/status`, `GET /api/v1/runs`, `GET /api/v1/runs/{id}` e
 `POST /api/v1/jobs/{nome}/run`. Per evitare esposizioni accidentali il bind
-accetta solo indirizzi IP loopback. La richiesta `POST` richiede anche
+accetta solo indirizzi IP loopback. Nei container è possibile impostare
+`allow_remote: true`, ma la porta va pubblicata su loopback o protetta da
+autenticazione esterna. La richiesta `POST` richiede anche
 l'header `X-Backuppo-UI: 1`, usato dalla UI per impedire trigger cross-site.
 
 La UI corrente usa azioni asincrone tramite

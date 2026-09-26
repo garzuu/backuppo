@@ -2,8 +2,13 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+const site = process.env.DOCS_SITE ?? 'https://backuppo.garzuu.com';
+const base = process.env.DOCS_BASE ?? '/';
+
 export default defineConfig({
-  site: 'https://backuppo.garzuu.com',
+  site,
+  base,
+  publicDir: '../apps/web/public',
   integrations: [
     starlight({
       title: 'Backuppo',
@@ -17,32 +22,107 @@ export default defineConfig({
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/garzuu/backuppo' },
       ],
+      favicon: '/backuppo-squirrel-192.png',
       sidebar: [
         {
-          label: 'Guida',
-          translations: { en: 'Guide' },
+          label: 'Inizia qui',
+          translations: { en: 'Start here' },
           items: [
-            { label: 'Quickstart', slug: 'quickstart' },
+            {
+              label: 'Come funziona',
+              translations: { en: 'How it works' },
+              slug: 'come-funziona',
+            },
+            {
+              label: 'Concetti',
+              translations: { en: 'Concepts' },
+              slug: 'concetti',
+            },
+            {
+              label: 'Installazione',
+              translations: { en: 'Installation' },
+              slug: 'installazione',
+            },
+            {
+              label: 'Primo backup',
+              translations: { en: 'First backup' },
+              slug: 'quickstart',
+            },
+          ],
+        },
+        {
+          label: 'Agent',
+          items: [
+            {
+              label: 'Wizard e più job',
+              translations: { en: 'Wizard and multiple jobs' },
+              slug: 'wizard-job',
+            },
+            {
+              label: 'Sorgenti',
+              translations: { en: 'Sources' },
+              slug: 'sorgenti',
+            },
+            {
+              label: 'Destinazioni',
+              translations: { en: 'Destinations' },
+              slug: 'destinazioni',
+            },
+            {
+              label: 'Operatività e notifiche',
+              translations: { en: 'Operations and notifications' },
+              slug: 'operativita',
+            },
+            {
+              label: 'Restore',
+              slug: 'restore',
+            },
+            {
+              label: 'Aggiornamenti',
+              translations: { en: 'Updates' },
+              slug: 'updates',
+            },
+          ],
+        },
+        {
+          label: 'Hub multi-sito',
+          translations: { en: 'Multi-site Hub' },
+          items: [
+            {
+              label: 'Agent, Hub e collegamento',
+              translations: { en: 'Agent, Hub and connection' },
+              slug: 'hub',
+            },
+            {
+              label: "Deploy dell'Hub",
+              translations: { en: 'Deploying the Hub' },
+              slug: 'hub-deploy',
+            },
+          ],
+        },
+        {
+          label: 'Riferimento',
+          translations: { en: 'Reference' },
+          items: [
             {
               label: 'Riferimento configurazione',
               translations: { en: 'Configuration reference' },
               slug: 'configuration',
             },
             {
-              label: 'Restore manuale',
-              translations: { en: 'Manual restore' },
-              slug: 'restore',
+              label: 'Comandi CLI',
+              translations: { en: 'CLI commands' },
+              slug: 'cli',
             },
-          ],
-        },
-        {
-          label: 'Hub multi-sito',
-          translations: { en: 'Multi-site hub' },
-          items: [
             {
-              label: "Deploy dell'hub",
-              translations: { en: 'Deploying the hub' },
-              slug: 'hub-deploy',
+              label: 'Sicurezza',
+              translations: { en: 'Security' },
+              slug: 'sicurezza',
+            },
+            {
+              label: 'Risoluzione dei problemi',
+              translations: { en: 'Troubleshooting' },
+              slug: 'troubleshooting',
             },
           ],
         },

@@ -3,24 +3,30 @@ title: Backuppo
 description: Backup open source, cross-platform, con verifica automatica del restore.
 template: splash
 hero:
-  tagline: Hai mai provato a fare il restore? Backuppo verifica automaticamente ogni backup, non solo lo esegue.
+  tagline: Backup verificati, su una macchina o su cento. L’Agent protegge i dati; l’Hub opzionale controlla tutti i siti.
+  image:
+    file: ../../../../apps/web/public/backuppo-squirrel-512.png
+    alt: Lo scoiattolo di Backuppo
   actions:
-    - text: Guida rapida
-      link: /quickstart/
+    - text: Come funziona
+      link: ./come-funziona/
       icon: right-arrow
       variant: primary
-    - text: Vedi su GitHub
-      link: https://github.com/garzuu/backuppo
-      icon: external
+    - text: Installa
+      link: ./installazione/
+      icon: download
+    - text: Primo backup
+      link: ./quickstart/
+      icon: right-arrow
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## Cos'è Backuppo
 
-Tool di backup generico per Linux, Windows e macOS, distribuito come singolo
-binario statico. Configurazione YAML versionabile su git, notifiche via
-SMTP, Telegram, webhook e ntfy.
+Backuppo è un sistema di backup self-hosted per Linux, Windows, macOS e
+Docker. Ogni Agent può lavorare da solo oppure inviare esclusivamente stato e
+metadati a un Hub centrale.
 
 <CardGrid stagger>
 	<Card title="Verifica automatica del restore" icon="approve-check">
@@ -39,7 +45,15 @@ SMTP, Telegram, webhook e ntfy.
 	</Card>
 	<Card title="Hub multi-sito opzionale" icon="open-book">
 		L'agent funziona sempre stand-alone. Un hub opzionale raccoglie stato e
-		metadati da più siti, con rilevamento offline e app Flutter di
-		controllo.
+		metadati da più siti, rileva quelli offline e consente operazioni remote
+		strettamente controllate.
 	</Card>
 </CardGrid>
+
+## Scegli il tuo percorso
+
+- **Una sola macchina:** installa l’[Agent](./installazione/), configura uno o
+  più job con il [wizard](./wizard-job/) e resta in modalità stand-alone.
+- **Più sedi o clienti:** installa un Agent in ogni sito, poi distribuisci un
+  [Hub](./hub/) centrale. I backup non passano mai dall’Hub.
+- **Devi recuperare dati:** vai direttamente alla guida al [restore](./restore/).

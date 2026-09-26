@@ -36,3 +36,19 @@ GitHub release.
 The pipeline rejects a tag that does not match the `backuppo` crate's
 version. Publishing to crates.io is a separate, permanent operation; it
 is not run automatically by the GitHub pipeline.
+
+## Update signing
+
+The release job requires the `UPDATE_SIGNING_KEY_B64` GitHub secret containing
+a base64-encoded Ed25519 private key in PEM format. Generate it once and keep
+the private key offline:
+
+```sh
+openssl genpkey -algorithm ED25519 -out update-signing-key.pem
+base64 < update-signing-key.pem
+openssl pkey -in update-signing-key.pem -pubout -outform DER | tail -c 32 | base64
+```
+
+The final value is `updates.public_key` and must be distributed separately
+from the artifacts. The workflow publishes raw binaries, `update-stable.json`,
+and its signature; a missing signing key fails the release.
