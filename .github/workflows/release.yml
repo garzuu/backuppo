@@ -172,6 +172,51 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  packages-linux:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build Web UI
+        run: npm ci --prefix apps/web && npm run build --prefix apps/web
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-packages-linux
+      - name: Install packaging tools
+        run: cargo install cargo-deb cargo-generate-rpm --locked
+      - name: Build release binaries (glibc, for .deb/.rpm)
+        run: |
+          cargo build --locked --release --package backuppo
+          cargo build --locked --release --package backuppo-hub
+      - name: Build .deb packages
+        run: |
+          cargo deb --no-build -p backuppo
+          cargo deb --no-build -p backuppo-hub
+      - name: Build .rpm packages
+        run: |
+          cargo generate-rpm --target-dir target -p crates/cli
+          cargo generate-rpm --target-dir target -p crates/hub
+      - name: Rename packages with version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          cp target/debian/backuppo_*.deb "dist/backuppo-agent-${version}-amd64.deb"
+          cp target/debian/backuppo-hub_*.deb "dist/backuppo-hub-${version}-amd64.deb"
+          cp target/generate-rpm/backuppo-*.rpm "dist/backuppo-agent-${version}-x86_64.rpm"
+          cp target/generate-rpm/backuppo-hub-*.rpm "dist/backuppo-hub-${version}-x86_64.rpm"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backuppo-packages-linux
+          path: dist/*
+          if-no-files-found: error
+
   container:
     needs: validate
     strategy:
@@ -185,6 +230,11 @@ jobs:
             image_suffix: hub
     name: container-${{ matrix.product }}
     runs-on: ubuntu-latest
+    env:
+      # Vuoto finché i secret repo DOCKERHUB_USERNAME/DOCKERHUB_TOKEN non
+      # sono configurati: in quel caso si pubblica solo su GHCR, già attivo
+      # sopra. Vedi docs/src/content/docs/release.md.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -193,10 +243,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@v3
+        if: env.DOCKERHUB_USERNAME != ''
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/${{ github.repository }}-${{ matrix.image_suffix }}
+          images: |
+            ghcr.io/${{ github.repository }}-${{ matrix.image_suffix }}
+            ${{ env.DOCKERHUB_USERNAME != '' && format('docker.io/{0}/backuppo-{1}', env.DOCKERHUB_USERNAME, matrix.image_suffix) || '' }}
           tags: |
             type=ref,event=tag
             type=raw,value=latest
@@ -210,7 +267,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
   github-release:
-    needs: [validate, binaries, container]
+    needs: [validate, binaries, packages-linux, container]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

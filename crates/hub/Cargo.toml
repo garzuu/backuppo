@@ -38,3 +38,33 @@ wiremock = "0.6.5"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8.0"
+
+[package.metadata.deb]
+name = "backuppo-hub"
+maintainer = "garzuu <matteo@garzulano.com>"
+copyright = "2026, garzuu"
+extended-description = """\
+Hub multi-sito per Backuppo: riceve stato ed eventi dagli agent, gestisce \
+heartbeat, utenti, token e policy di sicurezza firmate."""
+section = "utils"
+priority = "optional"
+depends = "$auto"
+systemd-units = { unit-name = "backuppo-hub", enable = false, start = false }
+assets = [
+  ["target/release/backuppo-hub", "usr/bin/backuppo-hub", "755"],
+  ["README.md", "usr/share/doc/backuppo-hub/README.md", "644"],
+  ["CHANGELOG.md", "usr/share/doc/backuppo-hub/CHANGELOG.md", "644"],
+  ["LICENSE-MIT", "usr/share/doc/backuppo-hub/LICENSE-MIT", "644"],
+  ["LICENSE-APACHE", "usr/share/doc/backuppo-hub/LICENSE-APACHE", "644"],
+  ["examples/hub-config.yaml", "usr/share/doc/backuppo-hub/examples/hub-config.yaml", "644"],
+  ["deploy/packaging/common/backuppo-hub.service", "lib/systemd/system/backuppo-hub.service", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "backuppo-hub"
+assets = [
+  { source = "target/release/backuppo-hub", dest = "/usr/bin/backuppo-hub", mode = "755" },
+  { source = "README.md", dest = "/usr/share/doc/backuppo-hub/README.md", mode = "644", doc = true },
+  { source = "LICENSE-MIT", dest = "/usr/share/doc/backuppo-hub/LICENSE-MIT", mode = "644", doc = true },
+  { source = "deploy/packaging/common/backuppo-hub.service", dest = "/usr/lib/systemd/system/backuppo-hub.service", mode = "644" },
+]

@@ -1,0 +1,25 @@
+# Maintainer: garzuu <matteo@garzulano.com>
+# Generato da scripts/packaging/render-templates.sh. Pubblicarlo richiede
+# un account AUR e `git push` al repo ssh://aur@aur.archlinux.org/backuppo-bin.git
+# (azione del maintainer, non automatizzata da questo repo).
+pkgname=backuppo-bin
+pkgver=__VERSION__
+pkgrel=1
+pkgdesc="Backup verificati, su una macchina o su cento (binario precompilato)"
+arch=('x86_64')
+url="https://github.com/garzuu/backuppo"
+license=('MIT' 'Apache')
+provides=('backuppo')
+conflicts=('backuppo')
+source=("https://github.com/garzuu/backuppo/releases/download/v${pkgver}/backuppo-agent-v${pkgver}-x86_64-unknown-linux-musl.tar.gz")
+sha256sums=('__SHA256_LINUX_X86_64__')
+
+package() {
+  cd "${srcdir}/backuppo-agent-v${pkgver}-x86_64-unknown-linux-musl"
+  install -Dm755 bkpo "${pkgdir}/usr/bin/bkpo"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  install -Dm644 CHANGELOG.md "${pkgdir}/usr/share/doc/${pkgname}/CHANGELOG.md"
+  install -Dm644 LICENSE-MIT "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE-MIT"
+  install -Dm644 LICENSE-APACHE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE-APACHE"
+  install -Dm644 systemd/backuppo.service "${pkgdir}/usr/lib/systemd/system/backuppo.service"
+}

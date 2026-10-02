@@ -51,3 +51,23 @@ openssl pkey -in update-signing-key.pem -pubout -outform DER | tail -c 32 | base
 L'ultimo valore è `updates.public_key` e va distribuito separatamente dagli
 artefatti. La pipeline pubblica binari raw, `update-stable.json` e la relativa
 firma; una chiave mancante fa fallire la release.
+
+## Pubblicazione anche su Docker Hub (opzionale)
+
+Il job `container` pubblica sempre su GHCR. Per pubblicare in più anche su
+Docker Hub, aggiungi due secret al repository (Settings → Secrets and
+variables → Actions):
+
+- `DOCKERHUB_USERNAME`: lo username Docker Hub.
+- `DOCKERHUB_TOKEN`: un [access token](https://hub.docker.com/settings/security)
+  con permesso di push, non la password dell'account.
+
+Senza questi secret il job pubblica solo su GHCR senza errori: non sono
+obbligatori. Le immagini risultanti sono `docker.io/<username>/backuppo-agent`
+e `docker.io/<username>/backuppo-hub`.
+
+## Pacchetti Homebrew, AUR, winget
+
+Non automatizzati in questa pipeline: vedi
+[pacchetti di sistema](../packaging/) per generare i file dopo la release e
+pubblicarli manualmente nei rispettivi repo esterni.
