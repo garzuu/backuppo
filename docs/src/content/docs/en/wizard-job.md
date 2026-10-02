@@ -17,8 +17,11 @@ Open **Configuration**. The sidebar lists every job on this installation;
 1. **Source** — choose what to protect and where it is.
 2. **Destination** — select an existing destination or create one.
 3. **Schedule** — choose a preset or five-field cron expression and retention.
-4. **Protection** — set encryption, compression, restore verification and
-   maximum backup age.
+4. **Protection** — set encryption, compression, restore verification,
+   maximum backup age, and notifiers (Telegram, email, webhook, ntfy): create,
+   edit and delete them right here, then pick which ones fire on
+   `on_success`/`on_failure`/`on_verify`. The `hub` notifier stays managed
+   from the **Hub connection** page.
 5. **Review** — check the job before server-side validation.
 
 Destinations can be shared. Before changing one, the wizard identifies every
