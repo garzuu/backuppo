@@ -5,7 +5,7 @@ use backuppo_core::config::{Config, DestinationConfig, Retention};
 use backuppo_core::error::BackupError;
 use backuppo_core::model::JobEvent;
 use backuppo_core::model::{
-    Artifact, BackupEntry, BackupRef, OverwritePolicy, RestoreRequest, RestoreResult,
+    Artifact, BackupEntry, BackupRef, OverwritePolicy, RepositoryKey, RestoreRequest, RestoreResult,
 };
 use backuppo_core::secrets::resolve_env;
 use serde_json::Value;
@@ -305,6 +305,109 @@ pub(crate) async fn maintain(
         )));
     }
     Ok(())
+}
+
+fn parse_keys(bytes: &[u8]) -> Result<Vec<RepositoryKey>, BackupError> {
+    let values: Vec<Value> = serde_json::from_slice(bytes).map_err(|error| {
+        BackupError::Other(format!("risposta JSON di Restic non valida: {error}"))
+    })?;
+    Ok(values
+        .into_iter()
+        .filter_map(|value| {
+            Some(RepositoryKey {
+                id: value.get("id")?.as_str()?.to_string(),
+                user_name: value
+                    .get("user_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                host_name: value
+                    .get("host_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                created: value
+                    .get("created")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                current: value
+                    .get("current")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            })
+        })
+        .collect())
+}
+
+/// Elenca le chiavi che proteggono la master key del repository Restic.
+pub(crate) async fn key_list(
+    job_name: &str,
+    config: &Config,
+) -> Result<Vec<RepositoryKey>, BackupError> {
+    let settings = settings(job_name, config)?;
+    let bytes = output(&settings, &["key", "list", "--json"], None).await?;
+    parse_keys(&bytes)
+}
+
+/// Aggiunge una nuova chiave (nuova password) al repository Restic senza
+/// toccare i dati gia' scritti: Restic non ricifra nulla, avvolge la stessa
+/// master key con una password aggiuntiva. Autentica con la password
+/// corrente (`password_env`), quindi la vecchia chiave resta valida finche'
+/// non viene rimossa esplicitamente con [`key_remove`].
+pub(crate) async fn key_add(
+    job_name: &str,
+    config: &Config,
+    new_password: &str,
+) -> Result<RepositoryKey, BackupError> {
+    let settings = settings(job_name, config)?;
+    let before = key_list(job_name, config).await?;
+
+    let mut password_file = tempfile::NamedTempFile::new()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        password_file
+            .as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    use std::io::Write;
+    password_file.write_all(new_password.as_bytes())?;
+    password_file.flush()?;
+    let password_path = password_file.path().to_string_lossy().to_string();
+
+    output(
+        &settings,
+        &["key", "add", "--new-password-file", &password_path],
+        None,
+    )
+    .await?;
+    drop(password_file);
+
+    let after = key_list(job_name, config).await?;
+    after
+        .into_iter()
+        .find(|key| !before.iter().any(|existing| existing.id == key.id))
+        .ok_or_else(|| {
+            BackupError::Other(
+                "restic key add riuscito ma la nuova chiave non e' stata trovata in 'key list'"
+                    .to_string(),
+            )
+        })
+}
+
+/// Rimuove una chiave dal repository Restic per id (vedi [`key_list`]).
+/// Restic rifiuta di rimuovere l'ultima chiave rimasta: non si puo' restare
+/// senza modo di sbloccare il repository.
+pub(crate) async fn key_remove(
+    job_name: &str,
+    config: &Config,
+    key_id: &str,
+) -> Result<(), BackupError> {
+    let settings = settings(job_name, config)?;
+    output(&settings, &["key", "remove", key_id], None)
+        .await
+        .map(|_| ())
 }
 
 pub(crate) async fn snapshots(

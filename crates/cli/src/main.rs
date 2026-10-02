@@ -94,6 +94,11 @@ enum Command {
         #[arg(long)]
         overwrite: bool,
     },
+    /// Genera o ruota chiavi di cifratura.
+    Keys {
+        #[command(subcommand)]
+        action: KeysAction,
+    },
     /// Controlla, scarica o applica aggiornamenti firmati.
     Update {
         #[arg(long, value_name = "FILE")]
@@ -138,6 +143,45 @@ enum Command {
     Service {
         #[arg(long, value_name = "FILE")]
         config: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum KeysAction {
+    /// Genera una nuova identita' age X25519 per l'engine 'archive'
+    /// (`encryption.type: age`). Non tocca alcuna configurazione: stampa
+    /// solo la nuova identita' e il recipient pubblico.
+    GenerateAge,
+    /// Elenca le chiavi che proteggono il repository Restic di un job.
+    ListRestic {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+    },
+    /// Aggiunge una nuova password al repository Restic di un job, senza
+    /// ricifrare i dati gia' scritti. La password attuale resta valida
+    /// finche' non la rimuovi esplicitamente con 'remove-restic'.
+    RotateRestic {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+        /// Nome della variabile d'ambiente che contiene la nuova password
+        /// (non la password stessa).
+        #[arg(long)]
+        new_password_env: String,
+    },
+    /// Rimuove una chiave dal repository Restic di un job (vedi
+    /// 'list-restic' per gli id). Restic rifiuta di rimuovere l'ultima
+    /// chiave rimasta.
+    RemoveRestic {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+        #[arg(long)]
+        key_id: String,
     },
 }
 
@@ -202,6 +246,7 @@ async fn main() -> Result<()> {
             dry_run,
             overwrite,
         } => restore(&config, &job, snapshot, target, include, dry_run, overwrite).await,
+        Command::Keys { action } => keys(action).await,
         Command::Update { config, action } => update(&config, action).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
         Command::Daemon { config } => daemon::run(load_config(&config)?, config).await,
@@ -243,6 +288,74 @@ async fn maintain(config_path: &PathBuf, job_name: &str) -> Result<()> {
     backuppo_engine::maintain(job_name, &config).await?;
     println!("manutenzione Restic completata per '{job_name}'");
     Ok(())
+}
+
+async fn keys(action: KeysAction) -> Result<()> {
+    match action {
+        KeysAction::GenerateAge => {
+            use age::secrecy::ExposeSecret;
+            let identity = age::x25519::Identity::generate();
+            let recipient = identity.to_public();
+            println!("Nuova identita' age X25519. Non finisce da nessuna parte: salvala subito");
+            println!("in un secret manager, non in questo terminale o in uno script.\n");
+            println!(
+                "Identita' (segreta, va nella variabile referenziata da 'encryption.key_env'):"
+            );
+            println!("  {}\n", identity.to_string().expose_secret());
+            println!("Recipient pubblico (puoi condividerlo: cifra ma non decifra):");
+            println!("  {recipient}\n");
+            println!("Dopo averla salvata: aggiorna 'encryption.key_env' nella config e riavvia");
+            println!("l'agent. Gli archivi gia' scritti restano cifrati con la vecchia chiave:");
+            println!("conservala finche' non ripristini o non rifai da zero i backup esistenti.");
+            Ok(())
+        }
+        KeysAction::ListRestic { config, job } => {
+            let config = load_config(&config)?;
+            let keys = backuppo_engine::list_restic_keys(&job, &config).await?;
+            println!("ID\tUTENTE\tHOST\tCREATA\tCORRENTE");
+            for key in keys {
+                println!(
+                    "{}\t{}\t{}\t{}\t{}",
+                    key.id, key.user_name, key.host_name, key.created, key.current
+                );
+            }
+            Ok(())
+        }
+        KeysAction::RotateRestic {
+            config,
+            job,
+            new_password_env,
+        } => {
+            let config = load_config(&config)?;
+            let new_password =
+                backuppo_core::secrets::resolve_env("new_password_env", &new_password_env)?;
+            let key = backuppo_engine::rotate_restic_key(&job, &config, &new_password).await?;
+            println!("nuova chiave aggiunta al repository: id {}", key.id);
+            println!("la password attuale resta valida: non e' stato ricifrato nulla.");
+            println!();
+            println!("prossimi passi:");
+            println!("  1. annota l'id della vecchia chiave con 'bkpo keys list-restic'");
+            println!(
+                "  2. aggiorna 'password_env' nella config con la variabile della nuova password"
+            );
+            println!(
+                "  3. esegui 'bkpo verify --config ... --job {job}' per confermare che funzioni"
+            );
+            println!("  4. solo allora rimuovi la vecchia chiave:");
+            println!("     bkpo keys remove-restic --config ... --job {job} --key-id <id-vecchia-chiave>");
+            Ok(())
+        }
+        KeysAction::RemoveRestic {
+            config,
+            job,
+            key_id,
+        } => {
+            let config = load_config(&config)?;
+            backuppo_engine::remove_restic_key(&job, &config, &key_id).await?;
+            println!("chiave '{key_id}' rimossa dal repository di '{job}'");
+            Ok(())
+        }
+    }
 }
 
 async fn update(config_path: &PathBuf, action: UpdateAction) -> Result<()> {

@@ -15,6 +15,10 @@ Tutti i comandi Agent ricevono il file con `--config FILE`.
 | `bkpo restore --job NOME --snapshot ID --target DIR` | Ripristina in una directory |
 | `bkpo storage-check --job NOME` | Verifica la policy S3 Object Lock |
 | `bkpo maintain --job NOME` | Esegue retention/prune Restic privilegiata |
+| `bkpo keys generate-age` | Genera una nuova identità age X25519 |
+| `bkpo keys list-restic --job NOME` | Elenca le chiavi del repository Restic |
+| `bkpo keys rotate-restic --job NOME` | Aggiunge una nuova password senza ricifrare |
+| `bkpo keys remove-restic --job NOME --key-id ID` | Rimuove una chiave Restic |
 | `bkpo notify-test` | Prova uno o tutti i notifier |
 | `bkpo runs` / `bkpo logs ID` | Consulta lo storico locale |
 | `bkpo daemon` | Avvia scheduler, API e UI configurata |
