@@ -52,3 +52,22 @@ openssl pkey -in update-signing-key.pem -pubout -outform DER | tail -c 32 | base
 The final value is `updates.public_key` and must be distributed separately
 from the artifacts. The workflow publishes raw binaries, `update-stable.json`,
 and its signature; a missing signing key fails the release.
+
+## Also publishing to Docker Hub (optional)
+
+The `container` job always publishes to GHCR. To also publish to Docker Hub,
+add two repository secrets (Settings → Secrets and variables → Actions):
+
+- `DOCKERHUB_USERNAME`: your Docker Hub username.
+- `DOCKERHUB_TOKEN`: an [access token](https://hub.docker.com/settings/security)
+  with push permission, not the account password.
+
+Without these secrets the job still publishes to GHCR without failing: they
+are optional. The resulting images are `docker.io/<username>/backuppo-agent`
+and `docker.io/<username>/backuppo-hub`.
+
+## Homebrew, AUR, winget packages
+
+Not automated in this pipeline: see [system packages](../packaging/) to
+generate the files after a release and publish them manually to the
+respective external repositories.

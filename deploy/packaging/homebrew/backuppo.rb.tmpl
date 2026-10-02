@@ -1,0 +1,43 @@
+# Formula per un tap Homebrew personale (es. garzuu/homebrew-backuppo).
+# Generata da scripts/packaging/render-templates.sh, non pubblicata
+# automaticamente: va copiata nel repo del tap e poi `brew install`
+# risolve da lì. Homebrew core richiederebbe invece una PR separata
+# e criteri di notabilità del progetto.
+class Backuppo < Formula
+  desc "Backup verificati, su una macchina o su cento"
+  homepage "https://github.com/garzuu/backuppo"
+  version "__VERSION__"
+  license any_of: ["MIT", "Apache-2.0"]
+
+  on_macos do
+    on_arm do
+      url "https://github.com/garzuu/backuppo/releases/download/v__VERSION__/backuppo-agent-v__VERSION__-aarch64-apple-darwin.tar.gz"
+      sha256 "__SHA256_MACOS_ARM64__"
+    end
+    on_intel do
+      url "https://github.com/garzuu/backuppo/releases/download/v__VERSION__/backuppo-agent-v__VERSION__-x86_64-apple-darwin.tar.gz"
+      sha256 "__SHA256_MACOS_X86_64__"
+    end
+  end
+
+  on_linux do
+    url "https://github.com/garzuu/backuppo/releases/download/v__VERSION__/backuppo-agent-v__VERSION__-x86_64-unknown-linux-musl.tar.gz"
+    sha256 "__SHA256_LINUX_X86_64__"
+  end
+
+  def install
+    bin.install "bkpo"
+    doc.install "README.md", "CHANGELOG.md"
+  end
+
+  service do
+    run [opt_bin/"bkpo", "daemon", "--config", etc/"backuppo/config.yaml"]
+    keep_alive true
+    log_path var/"log/backuppo.log"
+    error_log_path var/"log/backuppo.log"
+  end
+
+  test do
+    system "#{bin}/bkpo", "--version"
+  end
+end

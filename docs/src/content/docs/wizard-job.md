@@ -20,8 +20,11 @@ installazione; **Nuovo** ne aggiunge uno, senza sostituire quelli esistenti.
 2. **Destinazione** — seleziona una destinazione esistente oppure creane una.
 3. **Pianificazione** — scegli una frequenza o inserisci un cron a cinque campi
    e imposta la retention.
-4. **Protezione** — configura cifratura, compressione, verifica restore e
-   soglia massima di età.
+4. **Protezione** — configura cifratura, compressione, verifica restore,
+   soglia massima di età e i notifier (Telegram, email, webhook, ntfy): li
+   crei, modifichi ed elimini direttamente qui, poi scegli quali usare per
+   `on_success`/`on_failure`/`on_verify`. Il notifier `hub` resta gestito
+   dalla pagina **Collegamento Hub**.
 5. **Riepilogo** — controlla le scelte prima della validazione.
 
 Le destinazioni sono risorse condivise: se ne modifichi una già usata, il

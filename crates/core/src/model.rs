@@ -25,6 +25,19 @@ pub struct BackupRef {
     pub bytes: Option<u64>,
 }
 
+/// Una chiave Restic che protegge la master key del repository (`restic key
+/// list`). Rimuovere una chiave non tocca i dati gia' scritti: le master key
+/// restano le stesse, cambia solo quali password possono sbloccarle.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RepositoryKey {
+    pub id: String,
+    pub user_name: String,
+    pub host_name: String,
+    pub created: String,
+    #[serde(default)]
+    pub current: bool,
+}
+
 /// Elemento mostrato durante la navigazione del contenuto di un backup.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BackupEntry {

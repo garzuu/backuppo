@@ -60,6 +60,15 @@ function sourceDefaults(type: string): ObjectMap {
   }
 }
 
+function notifierDefaults(type: string): ObjectMap {
+  switch (type) {
+    case "telegram": return { type, token_env: "TELEGRAM_BOT_TOKEN", chat_id: "" };
+    case "smtp": return { type, host: "smtp.example.com", port: 587, user: "", password_env: "SMTP_PASSWORD", from: "", to: [] };
+    case "ntfy": return { type, url: "https://ntfy.sh", topic: "" };
+    default: return { type: "webhook", url: "" };
+  }
+}
+
 function destinationDefaults(type: string): ObjectMap {
   switch (type) {
     case "sftp": return { type, host: "backup.example.com", port: 22, user: "backup", key_path: "/root/.ssh/id_ed25519", root: "/backups", retry: { max_times: 3 } };
@@ -99,6 +108,8 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
   const [step, setStep] = useState(0);
   const [nameDraft, setNameDraft] = useState("");
   const [newDestinationName, setNewDestinationName] = useState("");
+  const [newNotifierName, setNewNotifierName] = useState("");
+  const [newNotifierType, setNewNotifierType] = useState("webhook");
 
   useEffect(() => {
     if (!selectedJob || !jobs[selectedJob]) setSelectedJob(jobNames[0] ?? "");
@@ -207,6 +218,47 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
     setNewDestinationName("");
   }
 
+  function addNotifier() {
+    const requested = newNotifierName.trim();
+    if (!/^[a-zA-Z0-9_-]+$/.test(requested)) {
+      notify({ kind: "error", text: "Inserisci un nome notifier usando lettere, numeri, trattini o underscore." });
+      return;
+    }
+    if (object(parsed.config.notifiers)[requested]) {
+      notify({ kind: "error", text: `Il notifier ${requested} esiste già.` });
+      return;
+    }
+    mutate(config => {
+      if (!config.notifiers || typeof config.notifiers !== "object") config.notifiers = {};
+      object(config.notifiers)[requested] = notifierDefaults(newNotifierType);
+    });
+    setNewNotifierName("");
+  }
+
+  function patchNotifier(name: string, patch: ObjectMap) {
+    mutate(config => {
+      if (!config.notifiers || typeof config.notifiers !== "object") config.notifiers = {};
+      Object.assign(object(object(config.notifiers)[name]), patch);
+    });
+  }
+
+  function removeNotifier(name: string) {
+    if (!window.confirm(`Eliminare il notifier “${name}”? Verrà rimosso anche dalle regole di notifica dei job.`)) return;
+    mutate(config => {
+      const notifiersMap = object(config.notifiers);
+      delete notifiersMap[name];
+      const jobsMap = object(config.jobs);
+      for (const jobName of Object.keys(jobsMap)) {
+        const notifyConfigForJob = object(object(jobsMap[jobName]).notify);
+        for (const event of ["on_success", "on_failure", "on_verify"] as const) {
+          if (Array.isArray(notifyConfigForJob[event])) {
+            notifyConfigForJob[event] = (notifyConfigForJob[event] as unknown[]).filter(item => item !== name);
+          }
+        }
+      }
+    });
+  }
+
   if (!selectedJob || !jobs[selectedJob]) return <div className="wizard-empty"><div className="empty-icon">＋</div><h3>Crea il primo job di backup</h3><p>Un’installazione può contenere tutti i job che servono, ciascuno con sorgente, destinazione e pianificazione indipendenti.</p><button onClick={addJob}>Crea il primo job</button></div>;
 
   const job = object(jobs[selectedJob]);
@@ -220,7 +272,9 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
   const objectLock = object(destination.object_lock);
   const retention = object(job.retention);
   const notifyConfig = object(job.notify);
-  const notifierNames = Object.keys(object(parsed.config.notifiers));
+  const notifiers = object(parsed.config.notifiers);
+  const notifierNames = Object.keys(notifiers);
+  const manageableNotifierNames = notifierNames.filter(name => text(object(notifiers[name]).type) !== "hub");
   const usersOfDestination = jobNames.filter(name => text(object(jobs[name]).destination) === destinationName);
 
   function sourceStep() {
@@ -239,6 +293,17 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
   }
 
   function destinationStep() {
+    const retryConfig = object(destination.retry);
+    function advancedTransferFields(extra?: React.ReactNode) {
+      return <details className="advanced-fields">
+        <summary>Opzioni avanzate</summary>
+        <div className="field-grid">
+          <Field label="Tentativi massimi" type="number" value={number(retryConfig.max_times, 3)} onChange={value => patchDestination({ retry: { ...retryConfig, max_times: Number(value) } })} />
+          <Field label="Limite banda (KiB/s, opzionale)" type="number" value={optionalNumber(destination.bandwidth_limit_kib_s)} onChange={value => patchDestination({ bandwidth_limit_kib_s: value ? Number(value) : undefined })} />
+        </div>
+        {extra}
+      </details>;
+    }
     return <div className="wizard-form"><div className="form-intro"><h3>Dove vuoi conservare il backup?</h3><p>Puoi riutilizzare la stessa destinazione per più job oppure crearne una nuova.</p></div>
       <SelectField label="Destinazione usata da questo job" value={destinationName} onChange={value => patchJob({ destination: value, engine: text(object(destinations[value]).type) === "restic" ? "restic" : "archive" })}>
         {destinationNames.map(name => <option key={name} value={name}>{name}</option>)}
@@ -249,12 +314,13 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
         <option value="fs">Disco o cartella locale</option><option value="sftp">Server SFTP</option><option value="s3">S3 / MinIO</option><option value="webdav">WebDAV</option><option value="google_drive">Google Drive</option><option value="dropbox">Dropbox</option><option value="one_drive">OneDrive</option><option value="restic">Repository Restic</option>
       </SelectField>
       {destinationType === "fs" && <Field label="Cartella di destinazione" value={text(destination.root)} onChange={value => patchDestination({ root: value })} />}
-      {destinationType === "sftp" && <><div className="field-grid"><Field label="Host" value={text(destination.host)} onChange={value => patchDestination({ host: value })} /><Field label="Porta" type="number" value={number(destination.port, 22)} onChange={value => patchDestination({ port: Number(value) })} /><Field label="Utente" value={text(destination.user)} onChange={value => patchDestination({ user: value })} /><Field label="Cartella remota" value={text(destination.root)} onChange={value => patchDestination({ root: value })} /></div><div className="field-grid"><Field label="File chiave privata" value={text(destination.key_path)} onChange={value => patchDestination({ key_path: value || undefined })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value || undefined })} /><Field label="Fingerprint host" value={text(destination.host_key_fingerprint)} onChange={value => patchDestination({ host_key_fingerprint: value || undefined })} /></div></>}
-      {destinationType === "s3" && <><div className="field-grid"><Field label="Bucket" value={text(destination.bucket)} onChange={value => patchDestination({ bucket: value })} /><Field label="Regione" value={text(destination.region)} onChange={value => patchDestination({ region: value || undefined })} /><Field label="Endpoint personalizzato" value={text(destination.endpoint)} onChange={value => patchDestination({ endpoint: value || undefined })} /><Field label="Prefisso nel bucket" value={text(destination.root)} onChange={value => patchDestination({ root: value || undefined })} /></div><div className="field-grid"><Field label="Variabile access key" value={text(destination.access_key_id_env)} onChange={value => patchDestination({ access_key_id_env: value })} /><Field label="Variabile secret key" value={text(destination.secret_access_key_env)} onChange={value => patchDestination({ secret_access_key_env: value })} /></div></>}
-      {destinationType === "webdav" && <div className="field-grid"><Field label="URL" value={text(destination.url)} onChange={value => patchDestination({ url: value })} /><Field label="Utente" value={text(destination.user)} onChange={value => patchDestination({ user: value || undefined })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value || undefined })} /></div>}
+      {destinationType === "sftp" && <><div className="field-grid"><Field label="Host" value={text(destination.host)} onChange={value => patchDestination({ host: value })} /><Field label="Porta" type="number" value={number(destination.port, 22)} onChange={value => patchDestination({ port: Number(value) })} /><Field label="Utente" value={text(destination.user)} onChange={value => patchDestination({ user: value })} /><Field label="Cartella remota" value={text(destination.root)} onChange={value => patchDestination({ root: value })} /></div><div className="field-grid"><Field label="File chiave privata" value={text(destination.key_path)} onChange={value => patchDestination({ key_path: value || undefined })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value || undefined })} /><Field label="Fingerprint host" value={text(destination.host_key_fingerprint)} onChange={value => patchDestination({ host_key_fingerprint: value || undefined })} /></div>{advancedTransferFields()}</>}
+      {destinationType === "s3" && <><div className="field-grid"><Field label="Bucket" value={text(destination.bucket)} onChange={value => patchDestination({ bucket: value })} /><Field label="Regione" value={text(destination.region)} onChange={value => patchDestination({ region: value || undefined })} /><Field label="Endpoint personalizzato" value={text(destination.endpoint)} onChange={value => patchDestination({ endpoint: value || undefined })} /><Field label="Prefisso nel bucket" value={text(destination.root)} onChange={value => patchDestination({ root: value || undefined })} /></div><div className="field-grid"><Field label="Variabile access key" value={text(destination.access_key_id_env)} onChange={value => patchDestination({ access_key_id_env: value })} /><Field label="Variabile secret key" value={text(destination.secret_access_key_env)} onChange={value => patchDestination({ secret_access_key_env: value })} /></div>{advancedTransferFields(<label className="check-row"><input type="checkbox" checked={destination.virtual_host_style === true} onChange={event => patchDestination({ virtual_host_style: event.target.checked })} /> Stile virtual-hosted (<code>bucket.endpoint</code>) invece di path-style</label>)}</>}
+      {destinationType === "webdav" && <><div className="field-grid"><Field label="URL" value={text(destination.url)} onChange={value => patchDestination({ url: value })} /><Field label="Utente" value={text(destination.user)} onChange={value => patchDestination({ user: value || undefined })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value || undefined })} /></div>{advancedTransferFields()}</>}
       {["google_drive", "dropbox", "one_drive"].includes(destinationType) && <div className="field-grid"><Field label="Cartella remota" value={text(destination.root)} onChange={value => patchDestination({ root: value || undefined })} /><Field label="Variabile access token" value={text(destination.access_token_env)} onChange={value => patchDestination({ access_token_env: value })} /><Field label="Variabile refresh token" value={text(destination.refresh_token_env)} onChange={value => patchDestination({ refresh_token_env: value || undefined })} /><Field label="Client ID (opzionale)" value={text(destination.client_id)} onChange={value => patchDestination({ client_id: value || undefined })} /><Field label="Variabile client secret" value={text(destination.client_secret_env)} onChange={value => patchDestination({ client_secret_env: value || undefined })} /></div>}
       {destinationType === "restic" && <>
         <div className="field-grid"><Field label="Repository" value={text(destination.repository)} onChange={value => patchDestination({ repository: value })} /><Field label="Variabile password" value={text(destination.password_env)} onChange={value => patchDestination({ password_env: value })} /><Field label="Binario Restic" value={text(destination.binary, "restic")} onChange={value => patchDestination({ binary: value })} /></div>
+        <label className="check-row"><input type="checkbox" checked={destination.initialize !== false} onChange={event => patchDestination({ initialize: event.target.checked })} /> Inizializza il repository alla prima scrittura se non esiste già</label>
         <label className="check-row"><input type="checkbox" checked={destination.append_only === true} onChange={event => patchDestination({ append_only: event.target.checked, ...(!event.target.checked ? { object_lock: undefined } : {}) })} /> Repository append-only: il daemon non può eseguire retention o prune</label>
         {destination.append_only === true && <>
           <div className="form-intro subsection"><h3>Credenziali S3 separate</h3><p>L’identità di backup può scrivere; quella amministrativa viene caricata solo da <code>bkpo maintain</code>.</p></div>
@@ -296,7 +362,29 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
     return <div className="wizard-form"><div className="form-intro"><h3>Protezione e controlli</h3><p>Configura compressione, cifratura e verifica periodica del ripristino.</p></div>
       <div className="field-grid"><SelectField label="Compressione" value={text(job.compression, "zstd")} onChange={value => patchJob({ compression: value })}><option value="zstd">Zstandard (consigliata)</option><option value="none">Nessuna</option></SelectField><SelectField label="Verifica ripristino" value={text(job.verify_restore, "weekly")} onChange={value => patchJob({ verify_restore: value })}><option value="never">Mai</option><option value="every">Dopo ogni backup</option><option value="daily">Una volta al giorno</option><option value="weekly">Una volta a settimana</option></SelectField><Field label="Avvisa se il backup supera (ore)" type="number" value={number(job.max_backup_age_hours, 48)} onChange={value => patchJob({ max_backup_age_hours: value ? Number(value) : undefined })} /></div>
       {destinationType !== "restic" && <><SelectField label="Cifratura" value={encryptionType} onChange={value => patchJob({ encryption: value === "age" ? { type: "age", passphrase_env: "BACKUP_PASSPHRASE" } : { type: "none" } })}><option value="none">Nessuna</option><option value="age">Age</option></SelectField>{encryptionType === "age" && <div className="field-grid"><Field label="Variabile passphrase" value={text(encryption.passphrase_env)} onChange={value => patchJob({ encryption: { ...encryption, passphrase_env: value || undefined } })} /><Field label="Variabile chiave Age" value={text(encryption.key_env)} hint="Usa passphrase oppure chiave." onChange={value => patchJob({ encryption: { ...encryption, key_env: value || undefined } })} /></div>}</>}
-      <div className="form-intro subsection"><h3>Notifiche</h3><p>Seleziona i notifier già configurati. Puoi crearne altri dalla modalità YAML.</p></div>
+      <div className="form-intro subsection"><h3>Canali di notifica</h3><p>Crea e configura qui i notifier (Telegram, email, webhook, ntfy); il collegamento all'Hub si gestisce dalla pagina “Collegamento Hub”.</p></div>
+      <div className="notifier-manage-list">
+        {manageableNotifierNames.length === 0 && <p className="muted">Nessun notifier configurato.</p>}
+        {manageableNotifierNames.map(name => {
+          const notifierConfig = object(notifiers[name]);
+          const notifierType = text(notifierConfig.type, "webhook");
+          return <div key={name} className="notifier-manage-item">
+            <div className="notifier-manage-head"><strong>{name}</strong><span className="muted">{notifierType}</span><button className="danger" onClick={() => removeNotifier(name)}>Elimina</button></div>
+            {notifierType === "telegram" && <div className="field-grid"><Field label="Variabile token bot" value={text(notifierConfig.token_env)} onChange={value => patchNotifier(name, { token_env: value })} /><Field label="Chat ID" value={text(notifierConfig.chat_id)} onChange={value => patchNotifier(name, { chat_id: value })} /></div>}
+            {notifierType === "smtp" && <div className="field-grid"><Field label="Host" value={text(notifierConfig.host)} onChange={value => patchNotifier(name, { host: value })} /><Field label="Porta" type="number" value={number(notifierConfig.port, 587)} onChange={value => patchNotifier(name, { port: Number(value) })} /><Field label="Utente" value={text(notifierConfig.user)} onChange={value => patchNotifier(name, { user: value })} /><Field label="Variabile password" value={text(notifierConfig.password_env)} onChange={value => patchNotifier(name, { password_env: value })} /><Field label="Mittente" value={text(notifierConfig.from)} onChange={value => patchNotifier(name, { from: value })} /><Field label="Destinatari" hint="Separati da virgola." value={list(notifierConfig.to).join(", ")} onChange={value => patchNotifier(name, { to: value.split(",").map(item => item.trim()).filter(Boolean) })} /></div>}
+            {notifierType === "ntfy" && <div className="field-grid"><Field label="URL server" value={text(notifierConfig.url, "https://ntfy.sh")} onChange={value => patchNotifier(name, { url: value })} /><Field label="Topic" value={text(notifierConfig.topic)} onChange={value => patchNotifier(name, { topic: value })} /><Field label="Variabile token (opzionale)" value={text(notifierConfig.token_env)} onChange={value => patchNotifier(name, { token_env: value || undefined })} /></div>}
+            {notifierType === "webhook" && <div className="field-grid"><Field label="URL webhook" value={text(notifierConfig.url)} onChange={value => patchNotifier(name, { url: value })} /></div>}
+          </div>;
+        })}
+      </div>
+      <div className="inline-create">
+        <input placeholder="Nome nuovo notifier" value={newNotifierName} onChange={event => setNewNotifierName(event.target.value)} />
+        <select value={newNotifierType} onChange={event => setNewNotifierType(event.target.value)}>
+          <option value="webhook">Webhook</option><option value="telegram">Telegram</option><option value="smtp">Email (SMTP)</option><option value="ntfy">ntfy</option>
+        </select>
+        <button className="secondary" onClick={addNotifier}>Aggiungi notifier</button>
+      </div>
+      <div className="form-intro subsection"><h3>Regole per questo job</h3><p>Scegli quali notifier già creati usare e per quali eventi.</p></div>
       {notifierNames.length === 0 ? <p className="muted">Nessun notifier configurato: il job funzionerà senza notifiche.</p> : <div className="notifier-grid">{notifierNames.map(name => <label key={name}><strong>{name}</strong>{(["on_failure", "on_success", "on_verify"] as const).map(event => { const active = list(notifyConfig[event]).includes(name); return <span key={event}><input type="checkbox" checked={active} onChange={() => { const values = list(notifyConfig[event]); patchJob({ notify: { ...notifyConfig, [event]: active ? values.filter(item => item !== name) : [...values, name] } }); }} /> {event === "on_failure" ? "Errori" : event === "on_success" ? "Successi" : "Verifiche"}</span>; })}</label>)}</div>}
     </div>;
   }

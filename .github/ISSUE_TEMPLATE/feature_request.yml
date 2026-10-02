@@ -1,0 +1,31 @@
+name: Richiesta di funzionalità
+description: Proponi qualcosa di nuovo o un miglioramento.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Per cambi non banali, questa issue serve a discutere l'approccio
+        **prima** di una PR: vedi
+        [CONTRIBUTING.md](https://github.com/garzuu/backuppo/blob/main/CONTRIBUTING.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema che vuoi risolvere
+      description: Cosa non riesci a fare oggi con Backuppo?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+      description: Come immagini che dovrebbe funzionare.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative considerate
+      description: Workaround attuali, o altri strumenti che risolvono il problema.
+    validations:
+      required: false

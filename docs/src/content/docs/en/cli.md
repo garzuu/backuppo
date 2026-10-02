@@ -15,6 +15,10 @@ All Agent commands take `--config FILE`.
 | `bkpo restore --job NAME --snapshot ID --target DIR` | Restore to a directory |
 | `bkpo storage-check --job NAME` | Verify S3 Object Lock policy |
 | `bkpo maintain --job NAME` | Run privileged Restic retention/prune |
+| `bkpo keys generate-age` | Generate a new age X25519 identity |
+| `bkpo keys list-restic --job NAME` | List the Restic repository's keys |
+| `bkpo keys rotate-restic --job NAME` | Add a new password without re-encrypting |
+| `bkpo keys remove-restic --job NAME --key-id ID` | Remove a Restic key |
 | `bkpo notify-test` | Test one or all notifiers |
 | `bkpo runs` / `bkpo logs ID` | Read local history |
 | `bkpo daemon` | Start scheduler and configured API/UI |

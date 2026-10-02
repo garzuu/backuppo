@@ -10,6 +10,33 @@ d’ambiente; proteggi il file environment con permessi minimi. Conserva
 passphrase age o Restic anche fuori dall’host: senza di esse il restore non è
 possibile.
 
+## Rotazione delle chiavi
+
+`bkpo keys` gestisce la rotazione senza richiedere di ricreare i backup
+esistenti:
+
+- **Repository Restic**: `bkpo keys rotate-restic` aggiunge una nuova
+  password al repository autenticando con quella attuale. Restic non ricifra
+  nulla: avvolge la stessa master key con una password aggiuntiva, quindi
+  l’operazione è istantanea anche su repository grandi. La vecchia password
+  resta valida finché non la rimuovi esplicitamente con
+  `bkpo keys remove-restic` (che richiede di autenticarsi con una chiave
+  diversa da quella da rimuovere — è una protezione di Restic stesso contro
+  l’auto-esclusione). Ordine consigliato: `rotate-restic` → aggiorna
+  `password_env` nella config → `bkpo verify` per confermare che la nuova
+  password funzioni → `remove-restic` sulla vecchia. `bkpo keys list-restic`
+  mostra le chiavi presenti con i rispettivi id.
+- **Engine `archive` (cifratura age)**: `bkpo keys generate-age` genera una
+  nuova identità X25519 e la stampa (mai scritta su disco o in config). Qui
+  non c’è equivalente della rotazione Restic: ogni archivio è cifrato con la
+  chiave attiva al momento del backup, e cambiare `encryption.key_env` non
+  ricifra gli archivi già scritti. Conserva la vecchia identità finché non
+  hai ripristinato (o rifatto da zero) tutti i backup esistenti, altrimenti
+  diventano irrecuperabili.
+
+In entrambi i casi la chiave/password rimane l’unico modo per decifrare i
+dati: perderla equivale a perdere il backup.
+
 ## Superficie di rete
 
 - L’Agent ascolta su loopback per impostazione predefinita. Usa un tunnel SSH

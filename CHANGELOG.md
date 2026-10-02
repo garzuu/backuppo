@@ -4,6 +4,17 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Nuovo `bkpo keys`: genera identita' age X25519 (`generate-age`) e ruota le
+  password dei repository Restic senza ricifrare nulla (`rotate-restic`,
+  `list-restic`, `remove-restic`), sfruttando la gestione chiavi nativa di
+  Restic.
+- Pacchetti `.deb`/`.rpm` automatici a ogni release; template per Homebrew,
+  AUR e winget da compilare con `scripts/packaging/render-templates.sh`.
+  Pubblicazione opzionale anche su Docker Hub oltre a GHCR.
+- Wizard: gestione completa dei notifier (crea/modifica/elimina telegram,
+  smtp, webhook, ntfy) e campi avanzati per le destinazioni (retry,
+  limite di banda, virtual-host-style S3, inizializzazione repository
+  Restic).
 - Il wizard crea repository e job Restic per default, con binario Restic 0.19.1
   incluso nelle release e nell'immagine container.
 - Ripristino completo o selettivo da CLI, API e Web UI, con navigazione degli

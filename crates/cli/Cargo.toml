@@ -19,6 +19,7 @@ backuppo-engine.workspace = true
 backuppo-sources.workspace = true
 backuppo-destinations.workspace = true
 backuppo-notifiers.workspace = true
+age = "0.12.1"
 clap = { version = "4.6.7", features = ["derive"] }
 chrono = "0.4.45"
 anyhow = "1.0.104"
@@ -43,3 +44,33 @@ windows-service = "0.8.1"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+[package.metadata.deb]
+name = "backuppo"
+maintainer = "garzuu <matteo@garzulano.com>"
+copyright = "2026, garzuu"
+extended-description = """\
+Agent di backup open source e cross-platform con verifica automatica del \
+restore, cifratura age e destinazioni locali/SFTP/S3/WebDAV/cloud drive."""
+section = "utils"
+priority = "optional"
+depends = "$auto"
+systemd-units = { unit-name = "backuppo", enable = false, start = false }
+assets = [
+  ["target/release/bkpo", "usr/bin/bkpo", "755"],
+  ["README.md", "usr/share/doc/backuppo/README.md", "644"],
+  ["CHANGELOG.md", "usr/share/doc/backuppo/CHANGELOG.md", "644"],
+  ["LICENSE-MIT", "usr/share/doc/backuppo/LICENSE-MIT", "644"],
+  ["LICENSE-APACHE", "usr/share/doc/backuppo/LICENSE-APACHE", "644"],
+  ["examples/config.yaml", "usr/share/doc/backuppo/examples/config.yaml", "644"],
+  ["deploy/packaging/common/backuppo.service", "lib/systemd/system/backuppo.service", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "backuppo"
+assets = [
+  { source = "target/release/bkpo", dest = "/usr/bin/bkpo", mode = "755" },
+  { source = "README.md", dest = "/usr/share/doc/backuppo/README.md", mode = "644", doc = true },
+  { source = "LICENSE-MIT", dest = "/usr/share/doc/backuppo/LICENSE-MIT", mode = "644", doc = true },
+  { source = "deploy/packaging/common/backuppo.service", dest = "/usr/lib/systemd/system/backuppo.service", mode = "644" },
+]

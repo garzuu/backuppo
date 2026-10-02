@@ -1,0 +1,13 @@
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1790971676,"command":"./run-demo.sh","env":{"SHELL":"/bin/zsh"}}
+[0.173, "o", "\u001b[3J\u001b[H\u001b[2J"]
+[0.001, "o", "\u001b[1;36m$\u001b[0m bkpo run --config config.yaml --job documenti\r\n"]
+[0.627, "o", "job 'documenti': backup riuscito (1 file, 307 byte, checksum 525a7e11d0a877139ac19866b2f2d6aa0ab4a26abe28f7c1eaf9d06a84667ef6)\r\n"]
+[1.506, "o", "\u001b[1;36m$\u001b[0m bkpo verify --config config.yaml --job documenti\r\n"]
+[0.622, "o", "job 'documenti': restore verificato: archivio 'documenti-1790971677.tar.zst': 1 file (43 byte), checksum verificato su 1 file di campione\r\n"]
+[1.515, "o", "\r\n"]
+[0.000, "o", "\u001b[0;90m# simuliamo un bit-rot: un singolo byte corrotto nell'archivio\u001b[0m\r\n"]
+[1.018, "o", "\u001b[1;36m$\u001b[0m corrupt-one-byte \"dest/documenti-1790971677.tar.zst\"\r\n"]
+[2.156, "o", "\u001b[1;36m$\u001b[0m bkpo verify --config config.yaml --job documenti\r\n"]
+[0.619, "o", "job 'documenti': backup fallito: job 'documenti': impossibile ripristinare 'documenti-1790971677.tar.zst': errore di I/O: failed to iterate over archive\r\n"]
+[0.000, "o", "Error: verifica fallita\r\n"]
+[2.509, "x", "0"]
