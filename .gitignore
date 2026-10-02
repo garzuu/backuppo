@@ -1,6 +1,10 @@
 /target
 /apps/web/node_modules
 /apps/web/*.tsbuildinfo
+/apps/web/e2e/.state
+/apps/web/playwright-report
+/apps/web/test-results
 /apps/desktop/src-tauri/target
 /apps/desktop/src-tauri/gen/schemas
 .DS_Store
+/ROADMAP.local.md

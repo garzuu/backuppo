@@ -332,7 +332,7 @@ La UI corrente usa azioni asincrone tramite
 `POST /api/v1/jobs/{nome}/actions`, supporta anche verifica restore, test dei
 notifier e gli endpoint `/api/v1/config/*` per validare, salvare e applicare
 la configurazione. Le mutazioni richiedono il token CSRF restituito da
-`GET /api/v1/session`. Vedi [ui.md](ui.md) per il flusso completo.
+`GET /api/v1/session`. Vedi [wizard e più job](../wizard-job/) per il flusso completo.
 
 ## Log
 

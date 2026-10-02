@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Domande e discussioni generali
+    url: https://github.com/garzuu/backuppo/discussions
+    about: Per domande di configurazione o idee ancora poco definite, usa le Discussions invece di una issue.
+  - name: Segnalazione di sicurezza
+    url: https://github.com/garzuu/backuppo/security/advisories/new
+    about: Per vulnerabilità, non aprire una issue pubblica.

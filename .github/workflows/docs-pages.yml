@@ -7,6 +7,11 @@ on:
       - "docs/**"
       - "apps/web/public/backuppo-squirrel-*.png"
       - ".github/workflows/docs-pages.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "apps/web/public/backuppo-squirrel-*.png"
+      - ".github/workflows/docs-pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -44,12 +49,40 @@ jobs:
           DOCS_BASE: /backuppo
         run: npm run build --prefix docs
 
+      - name: Install lychee
+        uses: taiki-e/install-action@v2
+        with:
+          tool: lychee
+
+      - name: Check for broken links
+        run: |
+          # dist/ è servito sotto /backuppo/ in produzione (vedi DOCS_BASE),
+          # ma sul disco non c'è un sottolivello "backuppo": un symlink fa
+          # risolvere a lychee i link assoluti (/backuppo/...) che compaiono
+          # nell'HTML generato contro i file locali già costruiti.
+          mkdir -p /tmp/linkcheck-root
+          ln -s "$PWD/docs/dist" /tmp/linkcheck-root/backuppo
+          lychee --no-progress --max-retries 2 \
+            --root-dir /tmp/linkcheck-root \
+            --exclude-path docs/dist/404.html \
+            --exclude-path docs/dist/en/404.html \
+            --exclude-path docs/dist/sitemap-index.xml \
+            --exclude-path docs/dist/sitemap-0.xml \
+            --exclude "^https?://(.*\.)?example\.(com|org)" \
+            --exclude "^https?://backup\.example\.com" \
+            --exclude "^https?://garzuu\.github\.io/" \
+            --exclude "^https?://github\.com/garzuu/backuppo/" \
+            --exclude "^https?://hub\.docker\.com/" \
+            docs/dist
+
       - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/dist
 
   deploy:
+    if: github.event_name == 'push'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

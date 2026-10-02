@@ -1,0 +1,66 @@
+name: Segnalazione bug
+description: Qualcosa non funziona come documentato.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Per vulnerabilità di sicurezza non usare questo modulo: segui
+        [SECURITY.md](https://github.com/garzuu/backuppo/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Versione di Backuppo
+      description: Output di `bkpo --version` o `backuppo-hub --version`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Componente
+      options:
+        - Agent (bkpo)
+        - Hub (backuppo-hub)
+        - Web UI
+        - Documentazione
+        - Altro
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento atteso
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamento osservato
+      description: Includi l'errore esatto, se presente.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Passi per riprodurre
+      description: >-
+        Configurazione minima (senza segreti reali) che riproduce il
+        problema, se possibile.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log rilevanti
+      description: Esegui con `RUST_LOG=debug` se serve più dettaglio.
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: platform
+    attributes:
+      label: Piattaforma
+      placeholder: "Linux x86_64 musl / Windows 11 / macOS 15 arm64 / Docker"
+    validations:
+      required: true

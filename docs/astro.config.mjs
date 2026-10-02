@@ -120,9 +120,19 @@ export default defineConfig({
               slug: 'sicurezza',
             },
             {
+              label: 'Modello di minaccia',
+              translations: { en: 'Threat model' },
+              slug: 'modello-minaccia',
+            },
+            {
               label: 'Risoluzione dei problemi',
               translations: { en: 'Troubleshooting' },
               slug: 'troubleshooting',
+            },
+            {
+              label: 'Confronto con altri strumenti',
+              translations: { en: 'Comparison with other tools' },
+              slug: 'confronto',
             },
           ],
         },
@@ -134,6 +144,16 @@ export default defineConfig({
               label: 'Procedura di release',
               translations: { en: 'Release process' },
               slug: 'release',
+            },
+            {
+              label: 'Pacchetti di sistema',
+              translations: { en: 'System packages' },
+              slug: 'packaging',
+            },
+            {
+              label: 'Changelog e roadmap pubblica',
+              translations: { en: 'Changelog and public roadmap' },
+              slug: 'changelog',
             },
           ],
         },

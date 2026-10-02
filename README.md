@@ -69,7 +69,10 @@ bkpo restore --config config.yaml --job home-documents --snapshot latest --targe
 Per installare il componente giusto usa la
 [guida di installazione](https://garzuu.github.io/backuppo/installazione/); gli
 script e le configurazioni pronte sono in [`deploy/`](deploy/) (`linux`,
-`macos`, `windows`, `docker`, `systemd`).
+`macos`, `windows`, `docker`, `systemd`). Ogni release pubblica anche
+`.deb`/`.rpm` e un'immagine Docker su GHCR; vedi i
+[pacchetti di sistema](https://garzuu.github.io/backuppo/packaging/) per
+Homebrew, winget e AUR.
 
 ## Comandi principali
 
@@ -100,7 +103,8 @@ singolo host permette di eseguire e verificare job, consultare storico e log,
 ripristinare snapshot e modificare la configurazione con un wizard multi-job,
 validazione e reload sicuro. Sull'hub offre la vista multi-sito, i comandi
 remoti e l'amministrazione di utenti e token. È installabile come PWA ed è
-disponibile un wrapper desktop Tauri opzionale. Vedi la [guida alla UI](docs/ui.md).
+disponibile un wrapper desktop Tauri opzionale. Vedi la
+[guida al wizard](https://garzuu.github.io/backuppo/wizard-job/).
 
 ## Documentazione
 
