@@ -164,6 +164,7 @@ source:
 source: { type: disk_image, path: /dev/disk/by-id/example, output_filename: disk.img }
 source: { type: libvirt_vm, name: app-vm }
 source: { type: proxmox_vm, vmid: 100, mode: snapshot }
+source: { type: vmware_vm, vm: app01 }
 ```
 
 `disk_image` copia byte per byte un file o device. `libvirt_vm` salva XML e
@@ -175,6 +176,13 @@ sul nodo Proxmox stesso. `vzdump` rileva da solo se il vmid è una VM QEMU o
 un container LXC. `mode` accetta `snapshot` (default, non ferma la VM),
 `suspend` o `stop`; `vzdump_binary` permette di indicare un percorso non
 standard.
+
+`vmware_vm` esegue `govc export.ovf -vm <vm> <staging>`: la VM deve essere
+spenta (`poweredOff`), verificato con `govc vm.info` prima dell'export.
+`vm` è il nome o l'inventory path della VM per govc (es. `app01` oppure
+`/dc1/vm/app01`). L'autenticazione (`GOVC_URL`, `GOVC_USERNAME`,
+`GOVC_PASSWORD`, `GOVC_INSECURE`) va nell'ambiente del servizio agent, mai
+in questo file: govc la gestisce già da solo.
 
 ## Job
 

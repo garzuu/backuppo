@@ -208,3 +208,7 @@ jobs:
   # source: { type: libvirt_vm, name: app-vm }
   # Richiede l'agent sul nodo Proxmox stesso (accesso diretto a vzdump).
   # source: { type: proxmox_vm, vmid: 100, mode: snapshot }
+  # Richiede il binario govc installato e autenticato tramite le sue
+  # variabili d'ambiente (GOVC_URL/GOVC_USERNAME/GOVC_PASSWORD), non tramite
+  # questo file. La VM deve essere spenta.
+  # source: { type: vmware_vm, vm: app01 }
