@@ -10,6 +10,7 @@ mod mysql;
 mod postgres;
 mod proxmox_vm;
 mod sqlite;
+mod vmware_vm;
 
 pub use command::CommandSource;
 pub use disk_image::DiskImageSource;
@@ -20,6 +21,7 @@ pub use mysql::MySqlSource;
 pub use postgres::PostgresSource;
 pub use proxmox_vm::ProxmoxVmSource;
 pub use sqlite::SqliteSource;
+pub use vmware_vm::VmwareVmSource;
 
 use backuppo_core::config::SourceConfig;
 use backuppo_core::error::BackupError;
@@ -82,5 +84,8 @@ pub fn build(config: &SourceConfig) -> Result<Box<dyn Source>, BackupError> {
             mode,
             vzdump_binary,
         } => Ok(Box::new(ProxmoxVmSource::new(*vmid, *mode, vzdump_binary))),
+        SourceConfig::VmwareVm { vm, govc_binary } => {
+            Ok(Box::new(VmwareVmSource::new(vm, govc_binary)))
+        }
     }
 }

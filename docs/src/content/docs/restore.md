@@ -109,6 +109,10 @@ controlli.
   `vzdump` (`vzdump-qemu-*.vma.zst` o `vzdump-lxc-*.tar.zst`). Copialo sul
   nodo Proxmox di destinazione e ripristinalo con `qmrestore <file> <nuovo-vmid>`
   (QEMU) o `pct restore <nuovo-vmid> <file>` (LXC).
+- **VM VMware:** la cartella estratta contiene l'OVF e i VMDK esportati da
+  `govc export.ovf`. Importala con `govc import.ovf <file>.ovf` (su un
+  vCenter/ESXi di destinazione, con le stesse variabili `GOVC_*`) oppure con
+  "Deploy OVF Template" dalla UI vCenter.
 
 Esegui sempre il restore prima su un ambiente isolato. Backuppo usa container
 temporanei proprio per la verifica automatica dei dump PostgreSQL e MySQL.

@@ -111,6 +111,11 @@ checks.
   `vzdump` (`vzdump-qemu-*.vma.zst` or `vzdump-lxc-*.tar.zst`). Copy it to
   the destination Proxmox node and restore it with
   `qmrestore <file> <new-vmid>` (QEMU) or `pct restore <new-vmid> <file>` (LXC).
+- **VMware VM:** the extracted folder contains the OVF and VMDK files
+  exported by `govc export.ovf`. Import it with
+  `govc import.ovf <file>.ovf` (against a destination vCenter/ESXi, with
+  the matching `GOVC_*` variables) or via "Deploy OVF Template" in the
+  vCenter UI.
 
 Always try the restore on an isolated environment first. Backuppo uses
 disposable containers precisely to automatically verify PostgreSQL and

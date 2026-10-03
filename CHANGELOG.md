@@ -4,6 +4,11 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Nuova sorgente `vmware_vm`: esporta OVF+VMDK con `govc export.ovf` da
+  una VM vSphere/ESXi spenta (verificato con `govc vm.info`).
+  L'autenticazione (`GOVC_URL`/`GOVC_USERNAME`/`GOVC_PASSWORD`) resta
+  nell'ambiente del servizio, non nella config. Nessuna nuova dipendenza
+  Cargo (richiede `govc` installato a parte sull'host dell'agent).
 - Nuova sorgente `proxmox_vm`: esegue `vzdump` (QEMU o LXC, rilevato
   automaticamente dal vmid) con `mode: snapshot|suspend|stop`. Richiede
   l'agent sul nodo Proxmox stesso. Nessuna nuova dipendenza.

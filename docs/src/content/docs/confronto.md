@@ -18,7 +18,7 @@ velocità.
 | Web UI | Sì, incorporata in agent e hub | Sì (desktop Windows) | No (nativa); Backrest è una UI di terze parti | No (nativa); Vorta è un client desktop di terze parti | Sì (KopiaUI) |
 | Deduplica / incrementale | Sì, via motore Restic integrato | Parziale (differenziale/incrementale per immagini disco) | Sì, nativa | Sì, nativa | Sì, nativa (content-defined chunking) |
 | Database (dump nativi) | PostgreSQL, MySQL/MariaDB, SQLite | SQL Server, MySQL, PostgreSQL, Oracle | No (richiede script esterni) | No (richiede script esterni) | No (richiede script esterni) |
-| Immagini disco / VM | Immagini disco, VM libvirt, VM/container Proxmox | Immagini disco, VMware ESXi, Hyper-V | No | No | No |
+| Immagini disco / VM | Immagini disco, VM libvirt, VM/container Proxmox, VM VMware | Immagini disco, VMware ESXi, Hyper-V | No | No | No |
 | Multi-sito centralizzato | Hub opzionale, agent sempre stand-alone | Pannello centralizzato (a pagamento) | No | No | No |
 | Notifiche | SMTP, Telegram, ntfy, webhook | Email, pannello centrale | Nessuna nativa | Nessuna nativa (Borgmatic: email/webhook) | Email, Pushover, webhook (in modalità server) |
 
@@ -32,8 +32,8 @@ velocità.
   automatica del restore che nessuno dei tre offre out-of-the-box.
 - **Iperius** copre uno scope più ampio su Windows (VMware/Hyper-V, SQL
   Server, Oracle, pannello centralizzato) ma è closed-source, a pagamento
-  oltre un certo uso, e non multipiattaforma. Backuppo copre Proxmox ma non
-  ancora VMware.
+  oltre un certo uso, e non multipiattaforma. Backuppo copre Proxmox e
+  VMware (a VM spenta; Iperius può anche su VM accese).
 - Se il tuo intero stack è già su cron + restic/Borg/Kopia e funziona,
   **non c'è un motivo ovvio per migrare**: Backuppo ha senso soprattutto se
   vuoi scheduler, UI, notifiche e verifica restore senza assemblarli da

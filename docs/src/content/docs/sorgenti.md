@@ -46,6 +46,10 @@ privilegi, ad amministrare l’host.
   accesso diretto a `vzdump`. `mode: snapshot` (default) non ferma la VM,
   `suspend` la sospende brevemente, `stop` la spegne per la durata del
   backup.
+- `vmware_vm` esporta OVF+VMDK con `govc export.ovf`; la VM deve essere
+  spenta (stesso vincolo di `libvirt_vm`). Richiede `govc` installato e
+  autenticato tramite le sue variabili d'ambiente (`GOVC_URL`,
+  `GOVC_USERNAME`, `GOVC_PASSWORD`), non tramite la config di Backuppo.
 
 Consulta il [riferimento configurazione](../configuration/#sorgenti) per tutti
 i campi e gli esempi YAML.

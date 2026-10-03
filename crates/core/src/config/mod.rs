@@ -508,6 +508,16 @@ pub enum SourceConfig {
         #[serde(default = "default_vzdump_binary")]
         vzdump_binary: String,
     },
+    /// VM vSphere/ESXi spenta: esporta OVF+VMDK con `govc export.ovf`.
+    /// L'autenticazione (`GOVC_URL`/`GOVC_USERNAME`/`GOVC_PASSWORD`) resta
+    /// nell'ambiente del servizio, non nella config di Backuppo: govc la
+    /// gestisce già da solo.
+    VmwareVm {
+        /// Nome o inventory path della VM per govc (es. "app01" o "/dc1/vm/app01").
+        vm: String,
+        #[serde(default = "default_govc_binary")]
+        govc_binary: String,
+    },
 }
 
 /// Modalità di backup `vzdump`: `snapshot` non ferma la VM (richiede
@@ -540,6 +550,10 @@ fn default_disk_image_filename() -> String {
 
 fn default_vzdump_binary() -> String {
     "vzdump".to_string()
+}
+
+fn default_govc_binary() -> String {
+    "govc".to_string()
 }
 
 fn default_virsh_binary() -> String {
