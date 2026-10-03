@@ -42,6 +42,9 @@ I report periodici richiedono `observability.history_path`; aggregano lo
 storico degli ultimi giorni e vengono inviati dal daemon secondo il cron
 configurato.
 
+Per interrogare lo stato dei job da uno stack di monitoring esistente, vedi
+[integrazioni](../integrazioni/) (Prometheus).
+
 ## Quando l’Hub non risponde
 
 Gli eventi restano in una coda SQLite locale e vengono ritentati con backoff.

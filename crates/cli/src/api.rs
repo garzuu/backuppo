@@ -348,6 +348,7 @@ fn router(state: ApiState) -> Router {
         .route("/sw.js", get(service_worker))
         .route("/backuppo-squirrel-192.png", get(squirrel_192))
         .route("/backuppo-squirrel-512.png", get(squirrel_512))
+        .route("/metrics", get(metrics))
         .route("/api/v1/capabilities", get(capabilities))
         .route("/api/v1/session", get(session))
         .route("/api/v1/runtime", get(runtime_status))
@@ -431,6 +432,7 @@ async fn capabilities(State(state): State<ApiState>) -> Json<Capabilities> {
         "restore",
         "notifier_test",
         "config",
+        "metrics",
     ];
     #[cfg(feature = "hub")]
     features.push("hub");
@@ -484,6 +486,16 @@ fn history(config: &Config) -> Result<HistoryStore, ApiError> {
         )
     })?;
     HistoryStore::open(&settings.history_path).map_err(internal_error)
+}
+
+async fn metrics(State(state): State<ApiState>) -> Result<impl IntoResponse, ApiError> {
+    let config = state.runtime.config();
+    let store = history(&config)?;
+    let body = backuppo_engine::metrics::render(&config, &store).map_err(internal_error)?;
+    Ok((
+        [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
+        body,
+    ))
 }
 
 async fn status(State(state): State<ApiState>) -> Result<Json<Vec<JobStatus>>, ApiError> {

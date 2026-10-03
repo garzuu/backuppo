@@ -74,6 +74,11 @@ export default defineConfig({
               slug: 'operativita',
             },
             {
+              label: 'Integrazioni',
+              translations: { en: 'Integrations' },
+              slug: 'integrazioni',
+            },
+            {
               label: 'Restore',
               slug: 'restore',
             },

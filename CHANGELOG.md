@@ -4,6 +4,8 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Nuovo endpoint `GET /metrics` in formato Prometheus (storico esecuzioni
+  e verifiche per job: timestamp, esito, durata, byte).
 - Nuovo `bkpo restore-db`: ripristina un dump Postgres/MySQL direttamente in
   un container gia' in esecuzione o in un server raggiungibile dall'agent,
   invece di limitarsi a estrarlo in una directory locale. Sovrascrive con
