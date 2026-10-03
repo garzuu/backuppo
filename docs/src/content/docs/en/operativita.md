@@ -26,5 +26,8 @@ to success, failure and verification events. Test them before relying on them:
 bkpo notify-test --config /etc/backuppo/config.yaml
 ```
 
+To query job status from an existing monitoring stack, see
+[integrations](../integrazioni/) (Prometheus).
+
 If the Hub is unavailable, events remain in the local SQLite queue and are
 retried. Local backups, verification and notifications continue normally.

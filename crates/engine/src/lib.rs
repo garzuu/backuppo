@@ -4,6 +4,7 @@ pub mod archive;
 pub mod db_restore;
 pub mod history;
 mod manifest;
+pub mod metrics;
 mod naming;
 mod notify;
 mod observability;
