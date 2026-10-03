@@ -8,6 +8,7 @@ pub mod metrics;
 mod naming;
 mod notify;
 mod observability;
+pub mod overview;
 pub mod recovery;
 pub mod report;
 mod restic;

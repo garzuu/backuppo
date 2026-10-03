@@ -500,18 +500,16 @@ async fn metrics(State(state): State<ApiState>) -> Result<impl IntoResponse, Api
 
 async fn status(State(state): State<ApiState>) -> Result<Json<Vec<JobStatus>>, ApiError> {
     let config = state.runtime.config();
-    let records = history(&config)?.list(10_000).map_err(internal_error)?;
-    let mut jobs: Vec<_> = config.jobs.iter().collect();
-    jobs.sort_by_key(|(name, _)| *name);
+    let store = history(&config)?;
+    let overview =
+        backuppo_engine::overview::jobs_overview(&config, &store).map_err(internal_error)?;
     Ok(Json(
-        jobs.into_iter()
-            .map(|(job, settings)| JobStatus {
-                latest: records
-                    .iter()
-                    .find(|record| record.job == *job && record.kind == "backup")
-                    .cloned(),
-                job: job.clone(),
-                schedule: settings.schedule.clone(),
+        overview
+            .into_iter()
+            .map(|item| JobStatus {
+                job: item.job,
+                schedule: item.schedule,
+                latest: item.latest,
             })
             .collect(),
     ))

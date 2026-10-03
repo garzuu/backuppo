@@ -42,3 +42,36 @@ Come il resto dell'API locale, `/metrics` non richiede autenticazione:
 vale la stessa superficie di rete descritta in
 [sicurezza](../sicurezza/#superficie-di-rete) — loopback per impostazione
 predefinita, tunnel SSH per accedervi da remoto.
+
+## Server MCP
+
+`bkpo mcp --config /etc/backuppo/config.yaml` avvia un server MCP (Model
+Context Protocol) **in sola lettura** su stdio, per interrogare lo stato
+dei backup da un client MCP come Claude Desktop o Claude Code. Nessun tool
+avvia, verifica o ripristina un backup: è un vincolo di design, non
+un'omissione temporanea.
+
+Configurazione di esempio per Claude Desktop/Code
+(`claude_desktop_config.json` o equivalente):
+
+```json
+{
+  "mcpServers": {
+    "backuppo": {
+      "command": "/usr/bin/bkpo",
+      "args": ["mcp", "--config", "/etc/backuppo/config.yaml"]
+    }
+  }
+}
+```
+
+Tool esposti:
+
+| Tool | Parametri | Restituisce |
+| --- | --- | --- |
+| `list_jobs` | — | Ogni job configurato: schedule, ultimo esito, ultima verifica |
+| `failing_jobs` | — | Solo i job la cui ultima esecuzione o verifica non sono riuscite |
+| `job_history` | `job` (obbligatorio), `limit` (opzionale, default 20) | Esecuzioni recenti di quel job, più recenti prima |
+
+Come `/metrics`, richiede `observability.history_path` configurato.
+

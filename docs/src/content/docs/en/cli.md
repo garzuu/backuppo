@@ -20,6 +20,7 @@ All Agent commands take `--config FILE`.
 | `bkpo keys list-restic --job NAME` | List the Restic repository's keys |
 | `bkpo keys rotate-restic --job NAME` | Add a new password without re-encrypting |
 | `bkpo keys remove-restic --job NAME --key-id ID` | Remove a Restic key |
+| `bkpo mcp` | Start a read-only MCP server over stdio |
 | `bkpo notify-test` | Test one or all notifiers |
 | `bkpo runs` / `bkpo logs ID` | Read local history |
 | `bkpo daemon` | Start scheduler and configured API/UI |
