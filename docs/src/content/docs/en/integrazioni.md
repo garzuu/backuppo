@@ -41,3 +41,36 @@ absent(backuppo_last_run_timestamp_seconds{job="documents"})
 Like the rest of the local API, `/metrics` requires no authentication: the
 same network exposure described in [security](../sicurezza/) applies —
 loopback by default, an SSH tunnel to reach it remotely.
+
+## MCP server
+
+`bkpo mcp --config /etc/backuppo/config.yaml` starts a **read-only** MCP
+(Model Context Protocol) server over stdio, to query backup status from an
+MCP client such as Claude Desktop or Claude Code. No tool starts, verifies
+or restores a backup: that's a design constraint, not a temporary gap.
+
+Sample configuration for Claude Desktop/Code
+(`claude_desktop_config.json` or equivalent):
+
+```json
+{
+  "mcpServers": {
+    "backuppo": {
+      "command": "/usr/bin/bkpo",
+      "args": ["mcp", "--config", "/etc/backuppo/config.yaml"]
+    }
+  }
+}
+```
+
+Exposed tools:
+
+| Tool | Parameters | Returns |
+| --- | --- | --- |
+| `list_jobs` | — | Every configured job: schedule, last outcome, last verification |
+| `failing_jobs` | — | Only jobs whose last run or verification did not succeed |
+| `job_history` | `job` (required), `limit` (optional, default 20) | Recent runs for that job, most recent first |
+
+Like `/metrics`, this requires `observability.history_path` to be
+configured.
+

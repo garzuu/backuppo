@@ -1,5 +1,6 @@
 mod api;
 mod daemon;
+mod mcp;
 #[cfg(feature = "hub")]
 mod policy;
 mod storage_check;
@@ -126,6 +127,14 @@ enum Command {
         /// destinazione.
         #[arg(long)]
         yes: bool,
+    },
+    /// Avvia un server MCP (Model Context Protocol) in sola lettura su
+    /// stdio, per interrogare lo stato dei backup da un client MCP (es.
+    /// Claude Desktop/Code). Nessun comando di scrittura (run/verify/
+    /// restore): solo lettura dello storico locale.
+    Mcp {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
     },
     /// Genera o ruota chiavi di cifratura.
     Keys {
@@ -305,6 +314,7 @@ async fn main() -> Result<()> {
             )
             .await
         }
+        Command::Mcp { config } => mcp::run(load_config(&config)?).await,
         Command::Keys { action } => keys(action).await,
         Command::Update { config, action } => update(&config, action).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,

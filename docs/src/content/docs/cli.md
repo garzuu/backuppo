@@ -20,6 +20,7 @@ Tutti i comandi Agent ricevono il file con `--config FILE`.
 | `bkpo keys list-restic --job NOME` | Elenca le chiavi del repository Restic |
 | `bkpo keys rotate-restic --job NOME` | Aggiunge una nuova password senza ricifrare |
 | `bkpo keys remove-restic --job NOME --key-id ID` | Rimuove una chiave Restic |
+| `bkpo mcp` | Avvia un server MCP in sola lettura su stdio |
 | `bkpo notify-test` | Prova uno o tutti i notifier |
 | `bkpo runs` / `bkpo logs ID` | Consulta lo storico locale |
 | `bkpo daemon` | Avvia scheduler, API e UI configurata |

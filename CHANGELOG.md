@@ -4,6 +4,9 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Nuovo `bkpo mcp`: server MCP in sola lettura su stdio (`list_jobs`,
+  `failing_jobs`, `job_history`) per interrogare lo stato dei backup da
+  Claude Desktop/Code o altri client MCP. Nessun tool di scrittura.
 - Nuovo endpoint `GET /metrics` in formato Prometheus (storico esecuzioni
   e verifiche per job: timestamp, esito, durata, byte).
 - Nuovo `bkpo restore-db`: ripristina un dump Postgres/MySQL direttamente in
