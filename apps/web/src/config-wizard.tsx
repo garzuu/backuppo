@@ -56,6 +56,7 @@ function sourceDefaults(type: string): ObjectMap {
     case "command": return { type, command: "/usr/local/bin/export-data", args: [], output_filename: "output" };
     case "disk_image": return { type, path: "/dev/disk/by-id/…", output_filename: "disk.img" };
     case "libvirt_vm": return { type, name: "nome-vm", virsh_binary: "virsh" };
+    case "proxmox_vm": return { type, vmid: 100, mode: "snapshot", vzdump_binary: "vzdump" };
     default: return { type: "folder", path: "/srv/data", exclude: [] };
   }
 }
@@ -280,7 +281,7 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
   function sourceStep() {
     return <div className="wizard-form"><div className="form-intro"><h3>Cosa vuoi salvare?</h3><p>Scegli il tipo di dato e indica dove Backuppo può trovarlo.</p></div>
       <SelectField label="Tipo di sorgente" value={sourceType} onChange={value => patchJob({ source: sourceDefaults(value) })}>
-        <option value="folder">Cartella</option><option value="sqlite">Database SQLite</option><option value="postgres">Database PostgreSQL</option><option value="mysql">Database MySQL</option><option value="docker_volume">Volume Docker</option><option value="command">Output di un comando</option><option value="disk_image">Disco o device</option><option value="libvirt_vm">Macchina virtuale libvirt</option>
+        <option value="folder">Cartella</option><option value="sqlite">Database SQLite</option><option value="postgres">Database PostgreSQL</option><option value="mysql">Database MySQL</option><option value="docker_volume">Volume Docker</option><option value="command">Output di un comando</option><option value="disk_image">Disco o device</option><option value="libvirt_vm">Macchina virtuale libvirt</option><option value="proxmox_vm">VM/container Proxmox</option>
       </SelectField>
       {sourceType === "folder" && <><Field label="Cartella da salvare" value={text(sourceConfig.path)} placeholder="/srv/data" onChange={value => patchSource({ path: value })} /><Field label="Esclusioni" hint="Percorsi o pattern separati da virgola." value={list(sourceConfig.exclude).join(", ")} onChange={value => patchSource({ exclude: value.split(",").map(item => item.trim()).filter(Boolean) })} /></>}
       {sourceType === "sqlite" && <Field label="File SQLite" value={text(sourceConfig.path)} placeholder="/srv/data/app.sqlite" onChange={value => patchSource({ path: value })} />}
@@ -289,6 +290,7 @@ export function ConfigWizard({ source, onChange, notify }: WizardProps) {
       {sourceType === "command" && <><Field label="Comando" value={text(sourceConfig.command)} onChange={value => patchSource({ command: value })} /><Field label="Argomenti" hint="Separati da virgola; non vengono interpretati da una shell." value={list(sourceConfig.args).join(", ")} onChange={value => patchSource({ args: value.split(",").map(item => item.trim()).filter(Boolean) })} /><Field label="Nome file prodotto" value={text(sourceConfig.output_filename, "output")} onChange={value => patchSource({ output_filename: value })} /></>}
       {sourceType === "disk_image" && <div className="field-grid"><Field label="File o device" value={text(sourceConfig.path)} onChange={value => patchSource({ path: value })} /><Field label="Nome immagine" value={text(sourceConfig.output_filename, "disk.img")} onChange={value => patchSource({ output_filename: value })} /></div>}
       {sourceType === "libvirt_vm" && <div className="field-grid"><Field label="Nome VM" value={text(sourceConfig.name)} onChange={value => patchSource({ name: value })} /><Field label="Binario virsh" value={text(sourceConfig.virsh_binary, "virsh")} onChange={value => patchSource({ virsh_binary: value })} /></div>}
+      {sourceType === "proxmox_vm" && <div className="field-grid"><Field label="VMID" type="number" value={number(sourceConfig.vmid, 100)} onChange={value => patchSource({ vmid: Number(value) })} /><SelectField label="Modalità" value={text(sourceConfig.mode, "snapshot")} onChange={value => patchSource({ mode: value })}><option value="snapshot">Snapshot (non ferma la VM)</option><option value="suspend">Suspend (sospende brevemente)</option><option value="stop">Stop (spegne per la durata del backup)</option></SelectField><Field label="Binario vzdump" value={text(sourceConfig.vzdump_binary, "vzdump")} onChange={value => patchSource({ vzdump_binary: value })} /></div>}
     </div>;
   }
 

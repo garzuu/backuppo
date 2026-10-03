@@ -8,6 +8,7 @@ mod folder;
 mod libvirt_vm;
 mod mysql;
 mod postgres;
+mod proxmox_vm;
 mod sqlite;
 
 pub use command::CommandSource;
@@ -17,6 +18,7 @@ pub use folder::FolderSource;
 pub use libvirt_vm::LibvirtVmSource;
 pub use mysql::MySqlSource;
 pub use postgres::PostgresSource;
+pub use proxmox_vm::ProxmoxVmSource;
 pub use sqlite::SqliteSource;
 
 use backuppo_core::config::SourceConfig;
@@ -75,5 +77,10 @@ pub fn build(config: &SourceConfig) -> Result<Box<dyn Source>, BackupError> {
         SourceConfig::LibvirtVm { name, virsh_binary } => {
             Ok(Box::new(LibvirtVmSource::new(name, virsh_binary)))
         }
+        SourceConfig::ProxmoxVm {
+            vmid,
+            mode,
+            vzdump_binary,
+        } => Ok(Box::new(ProxmoxVmSource::new(*vmid, *mode, vzdump_binary))),
     }
 }
