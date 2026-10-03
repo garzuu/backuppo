@@ -42,6 +42,46 @@ Like the rest of the local API, `/metrics` requires no authentication: the
 same network exposure described in [security](../sicurezza/) applies —
 loopback by default, an SSH tunnel to reach it remotely.
 
+## Home Assistant (MQTT)
+
+The `mqtt` notifier publishes each job's status as Home Assistant entities
+via [MQTT Discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery),
+with retained payloads: Home Assistant shows the last known state even
+after a restart or reconnection.
+
+Prerequisites: an MQTT broker (e.g. [Mosquitto](https://mosquitto.org/))
+reachable from the agent, and the MQTT integration already configured in
+Home Assistant, pointed at the same broker.
+
+```yaml
+notifiers:
+  home:
+    type: mqtt
+    host: 192.168.1.10
+    port: 1883
+    user: backuppo
+    password_env: MQTT_PASSWORD
+    discovery_prefix: homeassistant
+```
+
+For every job assigned to this notifier (`notify.on_success`/`on_failure`),
+two entities appear under a single "Backuppo" device:
+
+| Entity | Type | Meaning |
+| --- | --- | --- |
+| `binary_sensor.<job>_backup` | `device_class: problem` | `ON` if the last run failed |
+| `sensor.<job>_last_success` | `device_class: timestamp` | Date/time of the last successful backup |
+
+**Explicit limitation**: `Report` (periodic summary) and `SiteOffline`
+(hub-only) events have no single job to attach to and are not published to
+MQTT — they create or update no entity.
+
+Recommended manual check after configuring: with a local test broker
+(`brew install mosquitto && mosquitto`), run
+`mosquitto_sub -h HOST -t 'homeassistant/#' -t 'backuppo/#' -v` and trigger
+`bkpo run`/`bkpo notify-test` to eyeball the published payloads before
+trusting the entities Home Assistant creates from them.
+
 ## MCP server
 
 `bkpo mcp --config /etc/backuppo/config.yaml` starts a **read-only** MCP

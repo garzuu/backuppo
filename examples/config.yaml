@@ -93,6 +93,21 @@ notifiers:
   #   topic: backuppo-cambiami-con-un-valore-casuale
   #   token_env: NTFY_TOKEN   # opzionale, per topic protetti
 
+  # Entità Home Assistant via MQTT Discovery: per ogni job pubblica un
+  # binary_sensor (ultima esecuzione) e un sensor (timestamp dell'ultimo
+  # successo), entrambi raggruppati sotto un device "Backuppo". Richiede
+  # un broker MQTT (es. Mosquitto) e l'integrazione MQTT già attiva in
+  # Home Assistant.
+  # ops-home-assistant:
+  #   type: mqtt
+  #   host: 192.168.1.10
+  #   port: 1883
+  #   user: backuppo
+  #   password_env: MQTT_PASSWORD
+  #   client_id: backuppo
+  #   discovery_prefix: homeassistant
+  #   tls: false
+
   # Richiede il binario compilato con la feature Cargo `hub` (Fase 11,
   # opt-in). Manda solo metadati (esiti, durate, errori) all'hub, mai
   # contenuto dei backup né segreti.

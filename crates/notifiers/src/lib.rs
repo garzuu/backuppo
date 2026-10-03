@@ -2,6 +2,7 @@
 
 #[cfg(feature = "hub")]
 pub mod hub;
+mod mqtt;
 mod ntfy;
 mod smtp;
 mod telegram;
@@ -9,6 +10,7 @@ mod webhook;
 
 #[cfg(feature = "hub")]
 pub use hub::HubNotifier;
+pub use mqtt::MqttNotifier;
 pub use ntfy::NtfyNotifier;
 pub use smtp::SmtpNotifier;
 pub use telegram::TelegramNotifier;
@@ -48,6 +50,23 @@ pub fn build(config: &NotifierConfig) -> Result<Box<dyn Notifier>, BackupError> 
             url,
             topic,
             token_env.as_deref(),
+        )?)),
+        NotifierConfig::Mqtt {
+            host,
+            port,
+            user,
+            password_env,
+            client_id,
+            discovery_prefix,
+            tls,
+        } => Ok(Box::new(MqttNotifier::new(
+            host,
+            *port,
+            user.as_deref(),
+            password_env.as_deref(),
+            client_id,
+            discovery_prefix,
+            *tls,
         )?)),
         #[cfg(feature = "hub")]
         NotifierConfig::Hub {

@@ -348,6 +348,27 @@ pub enum NotifierConfig {
         #[serde(default)]
         token_env: Option<String>,
     },
+    /// Entità Home Assistant via MQTT Discovery: per ogni job pubblica un
+    /// `binary_sensor` (ultima esecuzione) e un `sensor` (timestamp
+    /// dell'ultimo successo), entrambi con payload retained. Gli eventi
+    /// `Report` e `SiteOffline` non hanno un job singolo a cui riferirsi e
+    /// non vengono pubblicati.
+    Mqtt {
+        host: String,
+        #[serde(default = "default_mqtt_port")]
+        port: u16,
+        #[serde(default)]
+        user: Option<String>,
+        #[serde(default)]
+        password_env: Option<String>,
+        #[serde(default = "default_mqtt_client_id")]
+        client_id: String,
+        /// Prefisso dei topic di discovery Home Assistant.
+        #[serde(default = "default_mqtt_discovery_prefix")]
+        discovery_prefix: String,
+        #[serde(default)]
+        tls: bool,
+    },
     /// Canale verso l'hub multi-sito: l'agent gli spedisce solo metadati
     /// (esiti, durate, errori), mai contenuto dei backup né segreti.
     #[cfg(feature = "hub")]
@@ -378,6 +399,18 @@ pub enum NotifierConfig {
         #[serde(default = "default_hub_policy_poll_seconds")]
         policy_poll_seconds: u64,
     },
+}
+
+fn default_mqtt_port() -> u16 {
+    1883
+}
+
+fn default_mqtt_client_id() -> String {
+    "backuppo".to_string()
+}
+
+fn default_mqtt_discovery_prefix() -> String {
+    "homeassistant".to_string()
 }
 
 #[cfg(feature = "hub")]

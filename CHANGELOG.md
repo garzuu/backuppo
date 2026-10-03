@@ -4,6 +4,11 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Nuovo notifier `mqtt` per Home Assistant via MQTT Discovery: pubblica
+  per ogni job un `binary_sensor` (ultima esecuzione) e un `sensor`
+  (ultimo successo), payload retained, sotto un unico device "Backuppo".
+  `Report`/`SiteOffline` non hanno un job singolo e non vengono pubblicati.
+  Testato end-to-end contro un broker Mosquitto locale reale.
 - Nuovo `bkpo mcp`: server MCP in sola lettura su stdio (`list_jobs`,
   `failing_jobs`, `job_history`) per interrogare lo stato dei backup da
   Claude Desktop/Code o altri client MCP. Nessun tool di scrittura.
