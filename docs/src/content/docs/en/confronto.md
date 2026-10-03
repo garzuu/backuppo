@@ -17,7 +17,7 @@ problems. This page compares design choices, not speed benchmarks.
 | Web UI | Yes, embedded in agent and hub | Yes (Windows desktop) | No (native); Backrest is a third-party UI | No (native); Vorta is a third-party desktop client | Yes (KopiaUI) |
 | Deduplication / incremental | Yes, via the built-in Restic engine | Partial (differential/incremental for disk images) | Yes, native | Yes, native | Yes, native (content-defined chunking) |
 | Database (native dumps) | PostgreSQL, MySQL/MariaDB, SQLite | SQL Server, MySQL, PostgreSQL, Oracle | No (needs external scripts) | No (needs external scripts) | No (needs external scripts) |
-| Disk images / VMs | Disk images, libvirt VMs | Disk images, VMware ESXi, Hyper-V | No | No | No |
+| Disk images / VMs | Disk images, libvirt VMs, Proxmox VMs/containers | Disk images, VMware ESXi, Hyper-V | No | No | No |
 | Centralized multi-site | Optional Hub, agent always stand-alone | Centralized dashboard (paid) | No | No | No |
 | Notifications | SMTP, Telegram, ntfy, webhook | Email, central dashboard | None native | None native (Borgmatic: email/webhook) | Email, Pushover, webhook (server mode) |
 
@@ -31,8 +31,8 @@ problems. This page compares design choices, not speed benchmarks.
   verification, which none of the three offer out of the box.
 - **Iperius** covers a wider scope on Windows (VMware/Hyper-V, SQL Server,
   Oracle, a central dashboard) but is closed-source, paid beyond a certain
-  usage level, and not cross-platform. Backuppo doesn't cover VMware/Proxmox
-  yet (see the VM section of the roadmap).
+  usage level, and not cross-platform. Backuppo covers Proxmox but not
+  VMware yet.
 - If your whole stack already runs on cron + restic/Borg/Kopia and it
   works, **there's no obvious reason to migrate**: Backuppo mainly makes
   sense if you want scheduling, a UI, notifications and restore

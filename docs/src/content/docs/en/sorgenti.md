@@ -16,6 +16,10 @@ files or execute the required tool.
 - **Disk image:** copies a file or block device byte for byte.
 - **libvirt VM:** saves domain XML and disks; shut down or quiesce the VM with
   hooks first.
+- **Proxmox VM/container:** runs `vzdump` for the given vmid (QEMU or LXC,
+  auto-detected); the agent must run on the Proxmox node itself, with
+  direct access to `vzdump`. `mode: snapshot` (default) doesn't stop the
+  guest, `suspend` briefly pauses it, `stop` powers it off for the backup.
 
 Database passwords use `password_env`. Ensure the environment variable is
 visible to the service, not only to your interactive shell. See the

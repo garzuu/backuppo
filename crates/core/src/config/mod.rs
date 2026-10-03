@@ -498,6 +498,28 @@ pub enum SourceConfig {
         #[serde(default = "default_virsh_binary")]
         virsh_binary: String,
     },
+    /// VM o container Proxmox: `vzdump` rileva da solo se il vmid è un
+    /// QEMU o un LXC. L'agent deve girare sul nodo Proxmox (accesso
+    /// diretto a `vzdump` e allo storage dei dump).
+    ProxmoxVm {
+        vmid: u32,
+        #[serde(default)]
+        mode: ProxmoxBackupMode,
+        #[serde(default = "default_vzdump_binary")]
+        vzdump_binary: String,
+    },
+}
+
+/// Modalità di backup `vzdump`: `snapshot` non ferma la VM (richiede
+/// storage che supporti gli snapshot), `suspend` la sospende brevemente,
+/// `stop` la spegne per la durata del backup.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxmoxBackupMode {
+    #[default]
+    Snapshot,
+    Suspend,
+    Stop,
 }
 
 fn default_postgres_port() -> u16 {
@@ -514,6 +536,10 @@ fn default_command_output_filename() -> String {
 
 fn default_disk_image_filename() -> String {
     "disk.img".to_string()
+}
+
+fn default_vzdump_binary() -> String {
+    "vzdump".to_string()
 }
 
 fn default_virsh_binary() -> String {

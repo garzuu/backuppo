@@ -163,11 +163,18 @@ source:
   output_filename: export.json
 source: { type: disk_image, path: /dev/disk/by-id/example, output_filename: disk.img }
 source: { type: libvirt_vm, name: app-vm }
+source: { type: proxmox_vm, vmid: 100, mode: snapshot }
 ```
 
 `disk_image` copia byte per byte un file o device. `libvirt_vm` salva XML e
 dischi elencati da `virsh`; la VM deve essere spenta per evitare immagini
 inconsistenti. Hook `pre` e `post` possono gestire l'arresto e il riavvio.
+
+`proxmox_vm` esegue `vzdump <vmid> --dumpdir <staging>`: l'agent deve girare
+sul nodo Proxmox stesso. `vzdump` rileva da solo se il vmid è una VM QEMU o
+un container LXC. `mode` accetta `snapshot` (default, non ferma la VM),
+`suspend` o `stop`; `vzdump_binary` permette di indicare un percorso non
+standard.
 
 ## Job
 

@@ -41,6 +41,11 @@ privilegi, ad amministrare l’host.
 - `disk_image` copia byte per byte un file o un device a blocchi.
 - `libvirt_vm` salva XML e dischi elencati da `virsh`; la VM deve essere
   spenta o resa consistente dagli hook `pre` e `post`.
+- `proxmox_vm` esegue `vzdump` per il vmid indicato (QEMU o LXC, rilevato
+  automaticamente): richiede che l'agent giri sul nodo Proxmox stesso, con
+  accesso diretto a `vzdump`. `mode: snapshot` (default) non ferma la VM,
+  `suspend` la sospende brevemente, `stop` la spegne per la durata del
+  backup.
 
 Consulta il [riferimento configurazione](../configuration/#sorgenti) per tutti
 i campi e gli esempi YAML.

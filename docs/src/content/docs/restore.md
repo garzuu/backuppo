@@ -105,6 +105,10 @@ controlli.
   solo a sistema smontato, per esempio con `dd if=disk.img of=/dev/DEST bs=4M`.
 - **VM libvirt:** ripristina i file sotto `disks/`, correggi i percorsi in
   `domain.xml` se necessario e importa con `virsh define domain.xml`.
+- **VM/container Proxmox:** il file estratto è l'archivio prodotto da
+  `vzdump` (`vzdump-qemu-*.vma.zst` o `vzdump-lxc-*.tar.zst`). Copialo sul
+  nodo Proxmox di destinazione e ripristinalo con `qmrestore <file> <nuovo-vmid>`
+  (QEMU) o `pct restore <nuovo-vmid> <file>` (LXC).
 
 Esegui sempre il restore prima su un ambiente isolato. Backuppo usa container
 temporanei proprio per la verifica automatica dei dump PostgreSQL e MySQL.

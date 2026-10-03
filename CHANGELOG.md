@@ -4,6 +4,9 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Nuova sorgente `proxmox_vm`: esegue `vzdump` (QEMU o LXC, rilevato
+  automaticamente dal vmid) con `mode: snapshot|suspend|stop`. Richiede
+  l'agent sul nodo Proxmox stesso. Nessuna nuova dipendenza.
 - Nuovo notifier `mqtt` per Home Assistant via MQTT Discovery: pubblica
   per ogni job un `binary_sensor` (ultima esecuzione) e un `sensor`
   (ultimo successo), payload retained, sotto un unico device "Backuppo".

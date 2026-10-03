@@ -107,6 +107,10 @@ checks.
   while unmounted, for example with `dd if=disk.img of=/dev/DEST bs=4M`.
 - **libvirt VM:** restore the files under `disks/`, fix the paths in
   `domain.xml` if needed, and import with `virsh define domain.xml`.
+- **Proxmox VM/container:** the extracted file is the archive produced by
+  `vzdump` (`vzdump-qemu-*.vma.zst` or `vzdump-lxc-*.tar.zst`). Copy it to
+  the destination Proxmox node and restore it with
+  `qmrestore <file> <new-vmid>` (QEMU) or `pct restore <new-vmid> <file>` (LXC).
 
 Always try the restore on an isolated environment first. Backuppo uses
 disposable containers precisely to automatically verify PostgreSQL and

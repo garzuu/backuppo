@@ -206,3 +206,5 @@ jobs:
   # source: { type: disk_image, path: /dev/disk/by-id/example,
   #           output_filename: disk.img }
   # source: { type: libvirt_vm, name: app-vm }
+  # Richiede l'agent sul nodo Proxmox stesso (accesso diretto a vzdump).
+  # source: { type: proxmox_vm, vmid: 100, mode: snapshot }
