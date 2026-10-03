@@ -15,12 +15,15 @@ use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tracing::info;
 
-pub(crate) fn connect() -> Result<Docker, BackupError> {
+/// Connette al demone Docker locale. Pubblica: serve anche a chi deve
+/// eseguire comandi in un container gia' in esecuzione (es. il restore di
+/// un database), non solo alle sorgenti di questo crate.
+pub fn connect() -> Result<Docker, BackupError> {
     Docker::connect_with_local_defaults()
         .map_err(|e| BackupError::Other(format!("impossibile connettersi al demone Docker: {e}")))
 }
 
-pub(crate) struct ExecResult {
+pub struct ExecResult {
     pub exit_code: i64,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
@@ -86,7 +89,8 @@ pub(crate) async fn remove_container(docker: &Docker, name: &str) {
 
 /// Esegue `cmd` dentro `container`, scrivendo `stdin` (se presente) e
 /// attendendone la chiusura, poi raccoglie stdout/stderr ed exit code.
-pub(crate) async fn exec(
+/// Pubblica per lo stesso motivo di [`connect`].
+pub async fn exec(
     docker: &Docker,
     container: &str,
     cmd: Vec<String>,

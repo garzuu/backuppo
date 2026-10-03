@@ -13,6 +13,7 @@ Tutti i comandi Agent ricevono il file con `--config FILE`.
 | `bkpo snapshots --job NOME` | Elenca gli snapshot |
 | `bkpo browse --job NOME --snapshot ID` | Elenca il contenuto |
 | `bkpo restore --job NOME --snapshot ID --target DIR` | Ripristina in una directory |
+| `bkpo restore-db --job NOME (--container NOME \| --host H --port P) --user U --password-env VAR --database DB --yes` | Ripristina un dump Postgres/MySQL direttamente in un database |
 | `bkpo storage-check --job NOME` | Verifica la policy S3 Object Lock |
 | `bkpo maintain --job NOME` | Esegue retention/prune Restic privilegiata |
 | `bkpo keys generate-age` | Genera una nuova identità age X25519 |

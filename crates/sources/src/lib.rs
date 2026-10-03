@@ -2,7 +2,7 @@
 
 mod command;
 mod disk_image;
-mod docker;
+pub mod docker;
 mod docker_volume;
 mod folder;
 mod libvirt_vm;

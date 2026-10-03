@@ -1,6 +1,7 @@
 //! Crate `engine`: esecuzione job, retention, verifica restore.
 
 pub mod archive;
+pub mod db_restore;
 pub mod history;
 mod manifest;
 mod naming;
@@ -19,6 +20,9 @@ use backuppo_core::error::BackupError;
 use backuppo_core::model::{Artifact, RepositoryKey};
 use tracing::warn;
 
+pub use db_restore::{
+    restore_database, DatabaseCredentials, DatabaseRestoreOutcome, DatabaseRestoreTarget,
+};
 pub use manifest::MANIFEST_FILENAME;
 pub use recovery::{browse, restore, snapshots};
 pub use runner::run_job;

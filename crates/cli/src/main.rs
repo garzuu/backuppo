@@ -94,6 +94,39 @@ enum Command {
         #[arg(long)]
         overwrite: bool,
     },
+    /// Ripristina un dump Postgres/MySQL direttamente in un database di
+    /// destinazione (container o server), invece di estrarlo soltanto in
+    /// una directory locale. Sovrascrive il database indicato.
+    RestoreDb {
+        #[arg(long, value_name = "FILE")]
+        config: PathBuf,
+        #[arg(long)]
+        job: String,
+        #[arg(long, default_value = "latest")]
+        snapshot: String,
+        /// Container già in esecuzione in cui applicare il dump
+        /// (alternativo a --host).
+        #[arg(long)]
+        container: Option<String>,
+        /// Host del server di destinazione (alternativo a --container).
+        #[arg(long)]
+        host: Option<String>,
+        /// Richiesta insieme a --host.
+        #[arg(long)]
+        port: Option<u16>,
+        #[arg(long)]
+        user: String,
+        /// Nome della variabile d'ambiente con la password (non la
+        /// password stessa).
+        #[arg(long)]
+        password_env: String,
+        #[arg(long)]
+        database: String,
+        /// Conferma esplicita: l'operazione sovrascrive il database di
+        /// destinazione.
+        #[arg(long)]
+        yes: bool,
+    },
     /// Genera o ruota chiavi di cifratura.
     Keys {
         #[command(subcommand)]
@@ -246,6 +279,32 @@ async fn main() -> Result<()> {
             dry_run,
             overwrite,
         } => restore(&config, &job, snapshot, target, include, dry_run, overwrite).await,
+        Command::RestoreDb {
+            config,
+            job,
+            snapshot,
+            container,
+            host,
+            port,
+            user,
+            password_env,
+            database,
+            yes,
+        } => {
+            restore_db(
+                &config,
+                &job,
+                &snapshot,
+                container,
+                host,
+                port,
+                user,
+                password_env,
+                database,
+                yes,
+            )
+            .await
+        }
         Command::Keys { action } => keys(action).await,
         Command::Update { config, action } => update(&config, action).await,
         Command::NotifyTest { config, notifier } => notify_test(&config, notifier.as_deref()).await,
@@ -612,6 +671,61 @@ async fn restore(
         result.bytes,
         result.snapshot,
         result.target.display()
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn restore_db(
+    config_path: &PathBuf,
+    job_name: &str,
+    snapshot: &str,
+    container: Option<String>,
+    host: Option<String>,
+    port: Option<u16>,
+    user: String,
+    password_env: String,
+    database: String,
+    yes: bool,
+) -> Result<()> {
+    if !yes {
+        bail!(
+            "questa operazione sovrascrive il database di destinazione: ripeti con --yes per confermare"
+        );
+    }
+    let target = match (container, host) {
+        (Some(_), Some(_)) => bail!("usa soltanto uno tra --container e --host"),
+        (None, None) => bail!("specifica --container oppure --host"),
+        (Some(name), None) => {
+            let password = backuppo_core::secrets::resolve_env("password_env", &password_env)?;
+            backuppo_engine::DatabaseRestoreTarget::Container {
+                name,
+                credentials: backuppo_engine::DatabaseCredentials {
+                    user,
+                    password,
+                    database,
+                },
+            }
+        }
+        (None, Some(host)) => {
+            let port = port.context("--port è richiesta insieme a --host")?;
+            let password = backuppo_core::secrets::resolve_env("password_env", &password_env)?;
+            backuppo_engine::DatabaseRestoreTarget::Server {
+                host,
+                port,
+                credentials: backuppo_engine::DatabaseCredentials {
+                    user,
+                    password,
+                    database,
+                },
+            }
+        }
+    };
+    let config = load_config(config_path)?;
+    let outcome = backuppo_engine::restore_database(job_name, &config, snapshot, &target).await?;
+    println!(
+        "ripristinati {} byte dallo snapshot '{}' nel database '{}'",
+        outcome.bytes, outcome.snapshot, outcome.database
     );
     Ok(())
 }
