@@ -16,6 +16,35 @@ La destinazione deve essere nuova o vuota; `--overwrite` richiede
 un'autorizzazione esplicita. `--dry-run` calcola file e byte senza scrivere, e
 `--include percorso` può essere ripetuto per un restore selettivo.
 
+## Restore diretto di un database
+
+Per i job `postgres` e `mysql`, `bkpo restore-db` applica il dump
+direttamente a un database di destinazione invece di limitarsi a estrarlo in
+una directory. Funziona sia con l'engine `archive` che con `restic`.
+
+```sh
+# dentro un container già in esecuzione
+bkpo restore-db --config config.yaml --job app-postgres \
+  --container app-postgres-nuovo \
+  --user app --password-env APP_DB_PASSWORD --database app \
+  --yes
+
+# su un server raggiungibile direttamente dall'agent
+bkpo restore-db --config config.yaml --job app-postgres \
+  --host db.nuovo.example.com --port 5432 \
+  --user app --password-env APP_DB_PASSWORD --database app \
+  --yes
+```
+
+`--yes` è obbligatorio: l'operazione sovrascrive gli oggetti presenti nel
+dump nel database di destinazione (per Postgres con `pg_restore
+--clean --if-exists`; i dump MySQL includono già `DROP TABLE IF EXISTS` per
+default). Oggetti del database di destinazione **non presenti nel dump**
+restano intatti: non è un `DROP DATABASE`. `--snapshot` (default `latest`)
+sceglie quale backup applicare, come per `bkpo restore`. Per SQLite non
+serve un comando dedicato: il file estratto da `bkpo restore` è già il
+database.
+
 La procedura seguente resta il percorso di emergenza senza il binario.
 
 Conserva una copia della configurazione e delle variabili dei segreti separata
@@ -64,9 +93,11 @@ controlli.
   dopo aver fermato l'applicazione che li usa.
 - **SQLite:** il file è `dump.sqlite`. Verificalo con
   `sqlite3 dump.sqlite 'PRAGMA integrity_check;'`, poi sostituisci il database.
-- **PostgreSQL:** il file è `dump.pgcustom`. Ripristinalo in un database vuoto:
-  `pg_restore --exit-on-error --no-owner --dbname app dump.pgcustom`.
-- **MySQL/MariaDB:** il file è `dump.sql`. Ripristinalo con
+- **PostgreSQL:** il file è `dump.pgcustom`. Con il binario disponibile usa
+  `bkpo restore-db` (sopra); a mano:
+  `pg_restore --exit-on-error --no-owner --clean --if-exists --dbname app dump.pgcustom`.
+- **MySQL/MariaDB:** il file è `dump.sql`. Con il binario disponibile usa
+  `bkpo restore-db` (sopra); a mano:
   `mysql --user root --password app < dump.sql`.
 - **Comando custom:** usa il file indicato da `output_filename` con lo strumento
   che ha prodotto l'export.

@@ -4,6 +4,12 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Nuovo `bkpo restore-db`: ripristina un dump Postgres/MySQL direttamente in
+  un container gia' in esecuzione o in un server raggiungibile dall'agent,
+  invece di limitarsi a estrarlo in una directory locale. Sovrascrive con
+  `pg_restore --clean --if-exists`/il comportamento di default di
+  `mysqldump` solo gli oggetti presenti nel dump. Testato end-to-end con un
+  vero server PostgreSQL locale, incluso il caso di conflitto di schema.
 - Nuovo `bkpo keys`: genera identita' age X25519 (`generate-age`) e ruota le
   password dei repository Restic senza ricifrare nulla (`rotate-restic`,
   `list-restic`, `remove-restic`), sfruttando la gestione chiavi nativa di
