@@ -4,6 +4,10 @@ Tutte le modifiche rilevanti sono documentate in questo file.
 
 ## [Unreleased]
 
+- Fix `vmware_vm`: la verifica dello stato di accensione usava
+  `govc vm.info -vm <vm>` (sintassi errata, `vm.info` vuole la VM come
+  argomento posizionale) invece di `govc vm.info <vm>`. Trovato testando
+  dal vivo contro `vmware/vcsim` (simulatore dell'API vSphere).
 - Nuova sorgente `vmware_vm`: esporta OVF+VMDK con `govc export.ovf` da
   una VM vSphere/ESXi spenta (verificato con `govc vm.info`).
   L'autenticazione (`GOVC_URL`/`GOVC_USERNAME`/`GOVC_PASSWORD`) resta

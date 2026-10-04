@@ -59,7 +59,11 @@ impl VmwareVmSource {
 #[async_trait]
 impl Source for VmwareVmSource {
     async fn prepare(&self, staging: &Path) -> Result<Artifact, BackupError> {
-        let info = self.govc(&["vm.info", "-vm", &self.vm]).await?;
+        // `vm.info` prende la VM come argomento posizionale, non come
+        // flag `-vm` (a differenza di `export.ovf`, che invece lo richiede
+        // come flag) — verificato contro un vero vcsim (simulatore
+        // dell'API vSphere del progetto govmomi), non solo dall'help.
+        let info = self.govc(&["vm.info", &self.vm]).await?;
         let info = String::from_utf8_lossy(&info);
         let state = Self::power_state(&info).unwrap_or("sconosciuto");
         if state != "poweredOff" {
@@ -114,15 +118,24 @@ mod tests {
 
     use super::*;
 
+    /// Lo script finge govc ma **verifica anche la forma esatta degli
+    /// argomenti** (`vm.info <vm>` posizionale, `export.ovf -vm <vm> <dir>`
+    /// con flag) invece di limitarsi a rispondere a qualunque invocazione:
+    /// la differenza tra le due sintassi è stata la causa di un bug reale
+    /// trovato testando contro un vero simulatore dell'API vSphere
+    /// (`vmware/vcsim`) — uno script troppo permissivo non lo avrebbe mai
+    /// fatto emergere.
     fn write_fake_govc(path: &Path, power_state: &str) {
         let script = format!(
             r#"#!/bin/sh
 case "$1" in
   vm.info)
+    [ "$2" = "app01" ] || {{ echo "argomenti vm.info inattesi: $*" >&2; exit 2; }}
     echo "Name:           app01"
     echo "  Power state:  {power_state}"
     ;;
   export.ovf)
+    [ "$2" = "-vm" ] && [ "$3" = "app01" ] || {{ echo "argomenti export.ovf inattesi: $*" >&2; exit 2; }}
     dir="$4"
     echo "ovf-data" > "$dir/app01.ovf"
     echo "vmdk-data" > "$dir/app01-disk1.vmdk"
